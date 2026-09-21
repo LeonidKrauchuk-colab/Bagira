@@ -1,0 +1,2261 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Админ-панель — Багира</title>
+
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+      margin: 0;
+      padding: 20px;
+
+      font-family: Arial, sans-serif;
+
+      background: #f5f5f5;
+
+      color: #333;
+    }
+
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+
+    h1 {
+      text-align: center;
+      margin-bottom: 25px;
+      padding: 18px 20px;
+      border-radius: 18px;
+      color: white;
+      background: linear-gradient(135deg, #67405a, #9a6787);
+      box-shadow: 0 8px 24px rgba(103, 64, 90, .18);
+    }
+
+
+    /* =========================
+       ДАТА
+    ========================= */
+
+    .date-panel {
+
+      background: white;
+
+      padding: 15px;
+
+      border-radius: 12px;
+
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.08);
+
+      margin-bottom: 20px;
+    }
+
+
+    .date-buttons {
+
+      display: flex;
+
+      gap: 10px;
+
+      align-items: center;
+
+      justify-content: center;
+
+      margin-bottom: 15px;
+    }
+
+
+    .date-buttons button {
+
+      border: none;
+
+      border-radius: 8px;
+
+      padding: 10px 16px;
+
+      font-size: 15px;
+
+      cursor: pointer;
+
+      background: #333;
+
+      color: white;
+    }
+
+
+    .date-buttons button:hover {
+      background: #555;
+    }
+
+
+    .today-button {
+      background: #5cb85c !important;
+    }
+
+
+    .today-button:hover {
+      background: #4cae4c !important;
+    }
+
+
+    .date-input {
+
+      display: none;
+
+      width: 100%;
+
+      max-width: 250px;
+
+      margin: 0 auto;
+
+      padding: 10px;
+
+      border: 1px solid #ccc;
+
+      border-radius: 8px;
+
+      font-size: 16px;
+    }
+
+
+    /* =========================
+       ОБНОВИТЬ
+    ========================= */
+
+    .refresh-container {
+
+      text-align: center;
+
+      margin-bottom: 20px;
+    }
+
+
+    .refresh-button {
+
+      background: #333;
+
+      color: white;
+
+      border: none;
+
+      border-radius: 8px;
+
+      padding: 11px 20px;
+
+      cursor: pointer;
+
+      font-size: 15px;
+    }
+
+
+    .refresh-button:hover {
+      background: #555;
+    }
+
+
+    /* =========================
+       СТАТИСТИКА
+    ========================= */
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .summary-box {
+      background: rgba(255, 255, 255, .96);
+      border-radius: 12px;
+      padding: 10px 6px;
+      text-align: center;
+      border: 1px solid rgba(103, 64, 90, .08);
+      box-shadow: 0 5px 16px rgba(70, 45, 65, .07);
+    }
+
+    .summary-number {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      font-weight: bold;
+      margin-bottom: 3px;
+    }
+
+    .summary-title {
+      font-size: 11px;
+      line-height: 1.2;
+      color: #777;
+    }
+
+    .summary-active .summary-number {
+      color: #4caf50;
+    }
+
+    .summary-free .summary-number {
+      color: #d4a000;
+    }
+
+    .summary-total .summary-number {
+      color: #337ab7;
+    }
+
+
+
+
+    /* =========================
+       ДЕНЬ
+    ========================= */
+
+    .day-title {
+
+      display: none;
+      background: #333;
+
+      color: white;
+
+      padding: 15px 18px;
+
+      border-radius: 10px;
+
+      margin-bottom: 15px;
+
+      font-size: 18px;
+
+      text-align: center;
+    }
+
+
+    /* =========================
+       СПИСОК
+    ========================= */
+
+    .booking-list {
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 12px;
+    }
+
+
+    /* =========================
+       КАРТОЧКА
+    ========================= */
+    .booking {
+      background: rgba(255, 255, 255, .97);
+      border: 1px solid #eadfea;
+      border-radius: 18px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: 0 6px 20px rgba(70, 45, 65, .07);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+
+    .booking:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 7px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .booking-time {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #333;
+    }
+
+    .booking-info {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 16px;
+    }
+
+    .booking-info>div {
+      font-size: 15px;
+      color: #555;
+      line-height: 1.4;
+    }
+
+    .booking-info strong {
+      color: #333;
+      font-weight: 600;
+    }
+
+    /* Имя клиента */
+    .booking-info>div:first-child {
+      font-size: 18px;
+      color: #222;
+      margin-bottom: 3px;
+    }
+
+    .booking-info>div:first-child strong {
+      font-weight: 700;
+    }
+
+    /* Услуга */
+    .booking-info>div:nth-child(4) {
+      display: inline-block;
+      width: fit-content;
+      background: #f7eef5;
+      color: #8b4d78;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+
+    /* Комментарий */
+    .booking-info>div:nth-child(5) {
+      background: #f8f8f8;
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: #777;
+      font-size: 14px;
+    }
+
+    /* Статус */
+    .booking-info>div:nth-child(6) {
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    /* Кнопки */
+    .booking .edit-button,
+    .booking .delete-button {
+      border: none;
+      border-radius: 9px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .booking .edit-button {
+      background: #f1e7ef;
+      color: #7d4269;
+      margin-right: 6px;
+    }
+
+    .booking .edit-button:hover {
+      background: #e7d8e3;
+    }
+
+    .booking .delete-button {
+      background: #f4eeee;
+      color: #9b5555;
+    }
+
+    .booking .delete-button:hover {
+      background: #eadede;
+    }
+
+
+
+    /* =========================
+       ЗАГРУЗКА
+    ========================= */
+
+    .loading {
+
+      background: white;
+
+      padding: 30px;
+
+      text-align: center;
+
+      border-radius: 12px;
+
+      color: #777;
+    }
+
+
+    /* =========================
+       ОШИБКА
+    ========================= */
+
+    .error {
+
+      background: #fff0f0;
+
+      color: #c00;
+
+      border:
+        1px solid #e5aaaa;
+
+      border-radius: 10px;
+
+      padding: 15px;
+
+      margin-bottom: 20px;
+    }
+
+
+    /* =========================
+       MODAL
+    ========================= */
+
+    .modal {
+
+      position: fixed;
+
+      inset: 0;
+
+      background:
+        rgba(0, 0, 0, 0.55);
+
+      display: none;
+
+      align-items: center;
+
+      justify-content: center;
+
+      padding: 20px;
+
+      z-index: 1000;
+    }
+
+
+    .modal.active {
+      display: flex;
+    }
+
+
+    .modal-content {
+
+      width: 100%;
+
+      max-width: 500px;
+
+      max-height: 90vh;
+
+      overflow-y: auto;
+
+      background: white;
+
+      border-radius: 15px;
+
+      padding: 25px;
+
+      box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.25);
+    }
+
+
+    .modal-title {
+
+      margin-top: 0;
+
+      margin-bottom: 20px;
+
+      text-align: center;
+    }
+
+
+    .modal-row {
+
+      margin-bottom: 15px;
+    }
+
+
+    .modal-row label {
+
+      display: block;
+
+      margin-bottom: 6px;
+
+      font-weight: bold;
+    }
+
+
+    .modal-row input,
+    .modal-row select,
+    .modal-row textarea {
+
+      width: 100%;
+
+      padding: 11px;
+
+      border:
+        1px solid #ccc;
+
+      border-radius: 8px;
+
+      font-size: 16px;
+
+      font-family: inherit;
+    }
+
+
+    .modal-row textarea {
+
+      min-height: 80px;
+
+      resize: vertical;
+    }
+
+
+    .modal-actions {
+
+      display: flex;
+
+      gap: 10px;
+
+      margin-top: 20px;
+    }
+
+
+    .modal-actions button {
+
+      flex: 1;
+
+      padding: 12px;
+
+      border: none;
+
+      border-radius: 8px;
+
+      font-size: 15px;
+
+      cursor: pointer;
+    }
+
+
+    .modal-cancel {
+
+      background: #ddd;
+
+      color: #333;
+    }
+
+
+    .modal-save {
+
+      background: #5cb85c;
+
+      color: white;
+    }
+
+
+    .modal-save:hover {
+      background: #4cae4c;
+    }
+
+
+    .modal-error {
+
+      display: none;
+
+      background: #fff0f0;
+
+      color: #c00;
+
+      border:
+        1px solid #e5aaaa;
+
+      padding: 10px;
+
+      border-radius: 8px;
+
+      margin-top: 10px;
+    }
+
+    .last-updated {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+    }
+
+    /* =========================
+       МОБИЛЬНАЯ ВЕРСИЯ
+    ========================= */
+
+    @media (max-width: 600px) {
+
+      body {
+        padding: 10px;
+      }
+
+
+      h1 {
+        font-size: 24px;
+      }
+
+
+      .summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .summary-box {
+        padding: 9px 3px;
+        min-width: 0;
+      }
+
+      .summary-number {
+        font-size: 20px;
+      }
+
+      .summary-title {
+        font-size: 10px;
+      }
+
+
+      .date-buttons {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) 52px;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 12px;
+      }
+
+      .date-buttons button {
+        width: 100%;
+        min-width: 0;
+        height: 44px;
+        padding: 6px 4px;
+        border-radius: 12px;
+        font-size: 0;
+      }
+
+      .date-buttons button:first-child::before {
+        content: "‹";
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .date-buttons button:last-child::before {
+        content: "›";
+        font-size: 30px;
+        line-height: 1;
+      }
+
+      .date-buttons button:nth-child(2) {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .date-input {
+        max-width: none;
+        height: 44px;
+      }
+
+      .booking-info strong {
+        display: block;
+      }
+
+    }
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <div class="container">
+
+
+    <h1>
+      🖥 Админ-панель «Багира»
+    </h1>
+
+
+    <!-- =========================
+       ДАТА
+  ========================== -->
+
+    <div class="date-panel">
+
+
+      <div class="date-buttons">
+
+
+        <button id="previousDayButton">
+          ← Предыдущий день
+        </button>
+
+
+        <button id="todayButton">
+          Сегодня
+        </button>
+
+
+        <button id="nextDayButton">
+          Следующий день →
+        </button>
+
+
+      </div>
+
+
+      <input type="date" id="selectedDate" class="date-input">
+
+
+    </div>
+
+
+    <!-- =========================
+       ОБНОВИТЬ
+  ========================== -->
+
+    <div class="refresh-container">
+
+      <button id="refreshButton" class="refresh-button">
+        🔄 Обновить записи
+      </button>
+
+      <div id="lastUpdated" class="last-updated">
+        Данные ещё не обновлялись
+      </div>
+
+    </div>
+
+
+    <!-- =========================
+       СТАТИСТИКА
+  ========================== -->
+
+    <div class="summary">
+
+      <div class="summary-box summary-active">
+        <span class="summary-number" id="activeCount">
+          0
+        </span>
+
+        <span class="summary-title">
+          Активных записей
+        </span>
+      </div>
+
+
+      <div class="summary-box summary-free">
+        <span class="summary-number" id="freeCount">
+          0
+        </span>
+
+        <span class="summary-title">
+          Свободных мест
+        </span>
+      </div>
+
+
+      <div class="summary-box summary-total">
+        <span class="summary-number" id="totalCount">
+          9
+        </span>
+
+        <span class="summary-title">
+          Всего мест
+        </span>
+      </div>
+
+    </div>
+
+
+    <!-- =========================
+       ОШИБКА
+  ========================== -->
+
+    <div id="error" class="error" style="display:none;"></div>
+
+
+    <!-- =========================
+       ЗАПИСИ
+  ========================== -->
+
+    <div id="bookingsContainer"></div>
+
+
+  </div>
+
+
+
+  <!-- =====================================================
+     MODAL НОВОЙ ЗАПИСИ
+===================================================== -->
+
+  <div class="modal" id="bookingModal">
+
+
+    <div class="modal-content">
+
+
+      <h2 class="modal-title" id="modalTitle">
+        ➕ Новая запись
+      </h2>
+
+
+      <!-- ДАТА -->
+
+      <div class="modal-row">
+
+        <label>
+          Дата
+        </label>
+
+        <input type="date" id="bookingDate">
+
+      </div>
+
+
+      <!-- ВРЕМЯ -->
+
+      <div class="modal-row">
+
+        <label>
+          Время
+        </label>
+
+        <select id="bookingTime">
+
+          <option value="">
+            Выберите время
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <!-- ИМЯ -->
+
+      <div class="modal-row">
+
+        <label>
+          Имя клиента
+        </label>
+
+        <input type="text" id="bookingName" placeholder="Введите имя">
+
+      </div>
+
+
+      <!-- ТЕЛЕФОН -->
+
+      <div class="modal-row">
+
+        <label>
+          Телефон
+        </label>
+
+        <input type="tel" id="bookingPhone" placeholder="+375 (XX) XXX-XX-XX">
+
+      </div>
+
+
+      <!-- TELEGRAM -->
+
+      <div class="modal-row">
+
+        <label>
+          Telegram
+        </label>
+
+        <input type="text" id="bookingTelegram" placeholder="@username">
+
+      </div>
+
+
+      <!-- УСЛУГА -->
+
+      <div class="modal-row">
+
+        <label>
+          Услуга
+        </label>
+
+        <select id="bookingService">
+
+          <option value="">
+            Выберите услугу
+          </option>
+
+          <option value="Маникюр">
+            Маникюр
+          </option>
+
+          <option value="Педикюр">
+            Педикюр
+          </option>
+
+          <option value="Депиляция">
+            Депиляция
+          </option>
+
+        </select>
+
+      </div>
+
+
+      <!-- КОММЕНТАРИЙ -->
+
+      <div class="modal-row">
+
+        <label>
+          Комментарий
+        </label>
+
+        <textarea id="bookingComment" placeholder="Комментарий"></textarea>
+
+      </div>
+
+
+      <!-- ОШИБКА -->
+
+      <div id="modalError" class="modal-error"></div>
+
+
+      <!-- КНОПКИ -->
+
+      <div class="modal-actions">
+
+        <button type="button" class="modal-cancel" id="closeModalButton">
+          Отмена
+        </button>
+
+
+        <button type="button" class="modal-save" id="saveBookingButton">
+          Создать запись
+        </button>
+
+      </div>
+
+
+    </div>
+
+  </div>
+
+
+
+  <script>
+
+
+    /* =====================================================
+       URL GOOGLE APPS SCRIPT
+    ===================================================== */
+
+    const GOOGLE_SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbx5bk4gWQXRvXjFo8METowWbFTQYh_4AjuyW4TGqEBg7FCzL2WLGICpwerhu0iGvt-C/exec";
+
+
+
+    const ADMIN_API_TOKEN = "BagiraAdmin_2026_irina";
+
+
+    /* =====================================================
+       РАБОЧЕЕ ВРЕМЯ
+    ===================================================== */
+
+    const WORK_TIMES = [
+
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00"
+
+    ];
+
+
+    /* =====================================================
+       ЭЛЕМЕНТЫ
+    ===================================================== */
+
+    const selectedDate =
+      document.getElementById(
+        "selectedDate"
+      );
+
+
+    const previousDayButton =
+      document.getElementById(
+        "previousDayButton"
+      );
+
+
+    const todayButton =
+      document.getElementById(
+        "todayButton"
+      );
+
+
+    const nextDayButton =
+      document.getElementById(
+        "nextDayButton"
+      );
+
+
+    const refreshButton =
+      document.getElementById(
+        "refreshButton"
+      );
+
+
+    const bookingsContainer =
+      document.getElementById(
+        "bookingsContainer"
+      );
+
+
+    const activeCount =
+      document.getElementById(
+        "activeCount"
+      );
+
+
+    const freeCount =
+      document.getElementById(
+        "freeCount"
+      );
+    const totalCount =
+      document.getElementById(
+        "totalCount"
+      );
+
+    const lastUpdated =
+      document.getElementById(
+        "lastUpdated"
+      );
+
+    const errorElement =
+      document.getElementById(
+        "error"
+      );
+
+
+    /* =====================================================
+       MODAL
+    ===================================================== */
+
+    const bookingModal =
+      document.getElementById(
+        "bookingModal"
+      );
+
+
+    const bookingDate =
+      document.getElementById(
+        "bookingDate"
+      );
+
+
+    const bookingTime =
+      document.getElementById(
+        "bookingTime"
+      );
+
+
+    const bookingName =
+      document.getElementById(
+        "bookingName"
+      );
+
+
+    const bookingPhone =
+      document.getElementById(
+        "bookingPhone"
+      );
+
+
+    const bookingTelegram =
+      document.getElementById(
+        "bookingTelegram"
+      );
+
+
+    const bookingService =
+      document.getElementById(
+        "bookingService"
+      );
+
+
+    const bookingComment =
+      document.getElementById(
+        "bookingComment"
+      );
+
+
+    const modalError =
+      document.getElementById(
+        "modalError"
+      );
+
+
+    const closeModalButton =
+      document.getElementById(
+        "closeModalButton"
+      );
+
+
+    const saveBookingButton =
+      document.getElementById(
+        "saveBookingButton"
+      );
+
+
+    const modalTitle =
+      document.getElementById(
+        "modalTitle"
+      );
+
+
+    /* ID редактируемой записи.
+       null = создаём новую запись. */
+    let editingBookingId = null;
+
+
+    /* =====================================================
+       СЕГОДНЯ
+    ===================================================== */
+
+    function getTodayString() {
+
+      const today =
+        new Date();
+
+
+      const year =
+        today.getFullYear();
+
+
+      const month =
+        String(
+          today.getMonth() + 1
+        ).padStart(2, "0");
+
+
+      const day =
+        String(
+          today.getDate()
+        ).padStart(2, "0");
+
+
+      return `${year}-${month}-${day}`;
+
+    }
+
+
+    /* =====================================================
+       УСТАНОВИТЬ СЕГОДНЯ
+    ===================================================== */
+
+    function setToday() {
+
+      selectedDate.value =
+        getTodayString();
+
+      updateTodayButton();
+
+    }
+    function updateTodayButton() {
+
+      const today = getTodayString();
+      const selected = selectedDate.value;
+
+      if (selected === today) {
+        todayButton.textContent = "Сегодня";
+        todayButton.classList.add("today-button");
+      } else {
+        todayButton.textContent = formatDayTitle(selected);
+        todayButton.classList.remove("today-button");
+      }
+
+    }
+
+    /* =====================================================
+       ИЗМЕНИТЬ ДАТУ
+    ===================================================== */
+
+    function changeDate(days) {
+
+      if (!selectedDate.value) {
+
+        setToday();
+
+      }
+
+
+      const date =
+        new Date(
+          `${selectedDate.value}T00:00:00`
+        );
+
+
+      date.setDate(
+        date.getDate() + days
+      );
+
+
+      const year =
+        date.getFullYear();
+
+
+      const month =
+        String(
+          date.getMonth() + 1
+        ).padStart(2, "0");
+
+
+      const day =
+        String(
+          date.getDate()
+        ).padStart(2, "0");
+
+
+      selectedDate.value =
+        `${year}-${month}-${day}`;
+
+      updateTodayButton();
+
+      loadBookings();
+
+    }
+
+
+    /* =====================================================
+       ФОРМАТ ДАТЫ
+    ===================================================== */
+
+    function formatDate(dateString) {
+
+      if (!dateString) {
+
+        return "";
+
+      }
+
+
+      const parts =
+        dateString.split("-");
+
+
+      if (parts.length !== 3) {
+
+        return dateString;
+
+      }
+
+
+      return (
+        `${parts[2]}.` +
+        `${parts[1]}.` +
+        `${parts[0]}`
+      );
+
+    }
+
+
+    /* =====================================================
+       НАЗВАНИЕ ДНЯ
+    ===================================================== */
+
+    function formatDayTitle(dateString) {
+
+      const date =
+        new Date(
+          `${dateString}T00:00:00`
+        );
+
+
+      const weekdays = [
+
+        "воскресенье",
+        "понедельник",
+        "вторник",
+        "среда",
+        "четверг",
+        "пятница",
+        "суббота"
+
+      ];
+
+
+      return (
+        `${formatDate(dateString)} — ` +
+        `${weekdays[date.getDay()]}`
+      );
+
+    }
+
+
+    /* =====================================================
+       ОШИБКА
+    ===================================================== */
+
+    function showError(message) {
+
+      errorElement.textContent =
+        message;
+
+      errorElement.style.display =
+        "block";
+
+    }
+
+
+    function hideError() {
+
+      errorElement.style.display =
+        "none";
+
+    }
+
+
+    /* =====================================================
+       ЗАГРУЗКА
+    ===================================================== */
+
+    async function loadBookings() {
+
+      hideError();
+
+      bookingsContainer.innerHTML = `
+        <div class="loading">
+          ⏳ Загружаем записи...
+        </div>
+      `;
+
+      try {
+
+        const response = await fetch(
+          GOOGLE_SCRIPT_URL + "?t=" + Date.now()
+        );
+
+        if (!response.ok) {
+          throw new Error("Ошибка загрузки данных");
+        }
+
+        const result = await response.json();
+
+        if (
+          !result ||
+          result.success !== true ||
+          !Array.isArray(result.bookings)
+        ) {
+          console.error("Ответ Google Apps Script:", result);
+
+          throw new Error(
+            "Google Apps Script вернул неправильный ответ"
+          );
+        }
+
+        const bookings = result.bookings;
+
+        const date = selectedDate.value;
+
+        /*
+         * В админ-панели учитываем только активные записи.
+         * "Новая" и "Отменена" полностью игнорируются.
+         */
+        const activeBookings = bookings.filter(booking => {
+
+          const bookingDate = String(
+            booking.date || ""
+          ).trim();
+
+          const status = String(
+            booking.status || ""
+          ).trim().toLowerCase();
+
+          return (
+            bookingDate === date &&
+            status === "активна"
+          );
+
+        });
+
+        /* Занятое время */
+        const busyTimes = new Set();
+
+        activeBookings.forEach(booking => {
+
+          const time = String(
+            booking.time || ""
+          )
+            .trim()
+            .substring(0, 5);
+
+          if (time) {
+            busyTimes.add(time);
+          }
+
+        });
+
+        bookingsContainer.innerHTML = "";
+
+        const dayElement = document.createElement("div");
+
+        const bookingList = document.createElement("div");
+        bookingList.className = "booking-list";
+
+        /* =================================================
+           АКТИВНЫЕ И СВОБОДНЫЕ
+        ================================================= */
+        WORK_TIMES.forEach(time => {
+
+          const booking = activeBookings.find(item => {
+
+            const itemTime = String(
+              item.time || ""
+            )
+              .trim()
+              .substring(0, 5);
+
+            return itemTime === time;
+
+          });
+
+          if (booking) {
+
+            bookingList.appendChild(
+              createActiveCard(booking)
+            );
+
+          } else {
+
+            bookingList.appendChild(
+              createFreeCard(time)
+            );
+
+          }
+
+        });
+
+        dayElement.appendChild(bookingList);
+        bookingsContainer.appendChild(dayElement);
+
+        /* =================================================
+           СТАТИСТИКА
+        ================================================= */
+        activeCount.textContent = activeBookings.length;
+
+        freeCount.textContent =
+          WORK_TIMES.filter(
+            time => !busyTimes.has(time)
+          ).length;
+        totalCount.textContent =
+          WORK_TIMES.length;
+
+        const now = new Date();
+
+        lastUpdated.textContent =
+          "Обновлено в " +
+          now.toLocaleTimeString(
+            "ru-RU",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit"
+            }
+          );
+
+      } catch (error) {
+
+        console.error(error);
+
+        bookingsContainer.innerHTML = "";
+
+        showError(
+          "Ошибка загрузки записей: " +
+          error.message
+        );
+
+      }
+
+    }
+
+
+    /* =====================================================
+       АКТИВНАЯ КАРТОЧКА
+    ===================================================== */
+
+    function createActiveCard(
+      booking
+    ) {
+
+      const card = document.createElement("div");
+
+      card.className =
+        "booking active-booking";
+
+      const time = String(
+        booking.time || ""
+      )
+        .trim()
+        .substring(0, 5);
+
+      card.innerHTML = `
+
+      <div class="booking-time">
+        🟢 ${time}
+      </div>
+
+      <div class="booking-info">
+
+        <div>
+          <strong>Имя:</strong>
+          ${escapeHtml(booking.name)}
+        </div>
+
+        <div>
+          <strong>Телефон:</strong>
+          ${escapeHtml(booking.phone)}
+        </div>
+
+        <div>
+          <strong>Telegram:</strong>
+          ${escapeHtml(booking.telegram)}
+        </div>
+
+        <div>
+          <strong>Услуга:</strong>
+          ${escapeHtml(booking.service)}
+        </div>
+
+        <div>
+          <strong>Комментарий:</strong>
+          ${escapeHtml(booking.comment)}
+        </div>
+
+        <div>
+          <strong>Статус:</strong>
+          🟢 Активна
+        </div>
+
+      </div>
+
+      <div>
+
+        <button class="edit-button">
+          ✏️ Редактировать
+        </button>
+
+        <button class="delete-button">
+          🗑 Удалить запись
+        </button>
+
+      </div>
+
+    `;
+
+      const editButton = card.querySelector(
+        ".edit-button"
+      );
+
+      editButton.addEventListener(
+        "click",
+        () => {
+          openEditBookingModal(booking);
+        }
+      );
+
+
+      const deleteButton = card.querySelector(
+        ".delete-button"
+      );
+
+      deleteButton.addEventListener(
+        "click",
+        async () => {
+
+          const confirmed = confirm(
+            `Удалить запись?\n\n` +
+            `Время: ${time}\n` +
+            `Клиент: ${booking.name}`
+          );
+
+          if (!confirmed) {
+            return;
+          }
+
+          await deleteBooking(booking.id);
+
+        }
+      );
+
+      return card;
+
+    }
+
+
+    /* =====================================================
+       СВОБОДНОЕ ВРЕМЯ
+    ===================================================== */
+
+    function createFreeCard(
+      time
+    ) {
+
+      const card =
+        document.createElement(
+          "div"
+        );
+
+
+      card.className =
+        "booking free-booking";
+
+
+      card.innerHTML = `
+
+      <div class="booking-time">
+        🟡 ${time}
+      </div>
+
+
+      <div class="free">
+        🟡 Свободно
+      </div>
+
+
+      <button
+        class="add-booking-button"
+      >
+        ➕ Добавить запись
+      </button>
+
+    `;
+
+
+      const addButton =
+        card.querySelector(
+          ".add-booking-button"
+        );
+
+
+      addButton.addEventListener(
+        "click",
+        () => {
+
+          openBookingModal(
+            selectedDate.value,
+            time
+          );
+
+        }
+      );
+
+
+      return card;
+
+    }
+
+
+    /* =====================================================
+       ОТКРЫТЬ ФОРМУ НОВОЙ ЗАПИСИ
+    ===================================================== */
+
+    function openBookingModal(
+      date,
+      time
+    ) {
+
+      editingBookingId = null;
+
+      modalTitle.textContent = "➕ Новая запись";
+      saveBookingButton.textContent = "Создать запись";
+
+      bookingDate.value =
+        date;
+
+
+      bookingTime.innerHTML =
+        `
+        <option value="">
+          Выберите время
+        </option>
+      `;
+
+
+      WORK_TIMES.forEach(
+        workTime => {
+
+          const option =
+            document.createElement(
+              "option"
+            );
+
+
+          option.value =
+            workTime;
+
+
+          option.textContent =
+            workTime;
+
+
+          bookingTime.appendChild(
+            option
+          );
+
+        }
+      );
+
+
+      bookingTime.value =
+        time;
+
+
+      bookingName.value =
+        "";
+
+
+      bookingPhone.value =
+        "";
+
+
+      bookingTelegram.value =
+        "";
+
+
+      bookingService.value =
+        "";
+
+
+      bookingComment.value =
+        "";
+
+
+      modalError.textContent =
+        "";
+
+
+      modalError.style.display =
+        "none";
+
+
+      bookingModal.classList.add(
+        "active"
+      );
+
+
+      bookingName.focus();
+
+    }
+
+
+    /* =====================================================
+       ОТКРЫТЬ ФОРМУ РЕДАКТИРОВАНИЯ
+    ===================================================== */
+
+    function openEditBookingModal(booking) {
+
+      editingBookingId = booking.id;
+
+      modalTitle.textContent = "✏️ Редактирование записи";
+      saveBookingButton.textContent = "Сохранить изменения";
+
+      bookingDate.value = booking.date || "";
+
+      bookingTime.innerHTML = `
+        <option value="">
+          Выберите время
+        </option>
+      `;
+
+      WORK_TIMES.forEach(workTime => {
+
+        const option = document.createElement("option");
+
+        option.value = workTime;
+        option.textContent = workTime;
+
+        bookingTime.appendChild(option);
+
+      });
+
+      bookingTime.value = String(booking.time || "")
+        .trim()
+        .substring(0, 5);
+
+      bookingName.value = booking.name || "";
+      bookingPhone.value = booking.phone || "";
+      bookingTelegram.value = booking.telegram || "";
+      bookingService.value = booking.service || "";
+      bookingComment.value = booking.comment || "";
+
+      modalError.textContent = "";
+      modalError.style.display = "none";
+
+      bookingModal.classList.add("active");
+
+      bookingName.focus();
+
+    }
+
+
+    /* =====================================================
+       ЗАКРЫТЬ MODAL
+    ===================================================== */
+
+    function closeBookingModal() {
+
+      bookingModal.classList.remove(
+        "active"
+      );
+
+      editingBookingId = null;
+      modalTitle.textContent = "➕ Новая запись";
+      saveBookingButton.textContent = "Создать запись";
+
+    }
+
+
+    /* =====================================================
+       СОЗДАТЬ ЗАПИСЬ
+    ===================================================== */
+
+    async function saveBooking() {
+
+      modalError.style.display = "none";
+
+      const date = bookingDate.value.trim();
+      const time = bookingTime.value.trim();
+      const name = bookingName.value.trim();
+      const phone = bookingPhone.value.trim();
+      const telegram = bookingTelegram.value.trim();
+      const service = bookingService.value.trim();
+      const comment = bookingComment.value.trim();
+
+      if (!date) {
+        showModalError("Выберите дату.");
+        return;
+      }
+
+      if (!time) {
+        showModalError("Выберите время.");
+        return;
+      }
+
+      if (!name) {
+        showModalError("Введите имя клиента.");
+        return;
+      }
+
+      if (!phone) {
+        showModalError("Введите телефон.");
+        return;
+      }
+
+      const phoneDigits = phone.replace(/\D/g, "");
+
+      if (
+        phoneDigits.length !== 12 ||
+        !phoneDigits.startsWith("375")
+      ) {
+        showModalError(
+          "Введите телефон в формате +375 (XX) XXX-XX-XX"
+        );
+        bookingPhone.focus();
+        return;
+      }
+
+      if (!service) {
+        showModalError("Выберите услугу.");
+        return;
+      }
+
+      saveBookingButton.disabled = true;
+      saveBookingButton.textContent =
+        editingBookingId ? "Сохраняем..." : "Создаём...";
+
+      try {
+
+        const payload = {
+          date: date,
+          time: time,
+          name: name,
+          phone: phone,
+          telegram: telegram,
+          service: service,
+          comment: comment,
+          adminToken: ADMIN_API_TOKEN
+        };
+        if (editingBookingId) {
+          payload.action = "updateAdminBooking";
+          payload.id = editingBookingId;
+        } else {
+          payload.action = "addAdminBooking";
+        }
+
+        const response = await fetch(
+          GOOGLE_SCRIPT_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify(payload)
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Ошибка отправки данных");
+        }
+
+        const result = await response.json();
+
+        console.log("Ответ сохранения:", result);
+
+        if (result.success === false) {
+          throw new Error(
+            result.error || "Не удалось сохранить запись"
+          );
+        }
+
+        const wasEditing = Boolean(editingBookingId);
+
+        closeBookingModal();
+        await loadBookings();
+
+        alert(
+          wasEditing
+            ? "✅ Запись успешно изменена"
+            : "✅ Запись успешно добавлена"
+        );
+
+      } catch (error) {
+
+        console.error(error);
+
+        showModalError(error.message);
+
+      } finally {
+
+        saveBookingButton.disabled = false;
+
+        saveBookingButton.textContent =
+          editingBookingId
+            ? "Сохранить изменения"
+            : "Создать запись";
+
+      }
+
+    }
+
+
+    /* =====================================================
+       ОШИБКА В MODAL
+    ===================================================== */
+
+    function showModalError(
+      message
+    ) {
+
+      modalError.textContent =
+        message;
+
+
+      modalError.style.display =
+        "block";
+
+    }
+
+
+    /* =====================================================
+       УДАЛЕНИЕ ЗАПИСИ
+    ===================================================== */
+
+    async function deleteBooking(id) {
+
+      try {
+
+        const response = await fetch(
+          GOOGLE_SCRIPT_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify({
+              action: "deleteAdminBooking",
+              id: id,
+              adminToken: ADMIN_API_TOKEN
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Ошибка запроса");
+        }
+
+        const result = await response.json();
+
+        if (result.success === false) {
+          throw new Error(
+            result.error ||
+            "Не удалось удалить запись"
+          );
+        }
+
+        alert("Запись удалена");
+
+        await loadBookings();
+
+      } catch (error) {
+
+        console.error(error);
+
+        alert(
+          "Ошибка удаления записи:\n" +
+          error.message
+        );
+
+      }
+
+    }
+
+
+    /* =====================================================
+       ЗАЩИТА HTML
+    ===================================================== */
+
+    function escapeHtml(value) {
+
+      if (
+        value === null ||
+        value === undefined
+      ) {
+
+        return "";
+
+      }
+
+
+      return String(value)
+
+        .replace(
+          /&/g,
+          "&amp;"
+        )
+
+        .replace(
+          /</g,
+          "&lt;"
+        )
+
+        .replace(
+          />/g,
+          "&gt;"
+        )
+
+        .replace(
+          /"/g,
+          "&quot;"
+        )
+
+        .replace(
+          /'/g,
+          "&#039;"
+        );
+
+    }
+
+
+    /* =====================================================
+       КНОПКИ ДАТЫ
+    ===================================================== */
+
+    previousDayButton.addEventListener(
+      "click",
+      () => {
+
+        changeDate(-1);
+
+      }
+    );
+
+
+    todayButton.addEventListener(
+      "click",
+      () => {
+
+        setToday();
+
+        loadBookings();
+
+      }
+    );
+
+
+    nextDayButton.addEventListener(
+      "click",
+      () => {
+
+        changeDate(1);
+
+      }
+    );
+
+
+    /* =====================================================
+       КАЛЕНДАРЬ
+    ===================================================== */
+
+    selectedDate.addEventListener(
+      "change",
+      () => {
+
+        updateTodayButton();
+        loadBookings();
+
+      }
+    );
+
+
+    /* =====================================================
+       ОБНОВИТЬ
+    ===================================================== */
+
+    refreshButton.addEventListener(
+      "click",
+      () => {
+
+        loadBookings();
+
+      }
+    );
+
+
+    /* =====================================================
+       MODAL КНОПКИ
+    ===================================================== */
+
+    closeModalButton.addEventListener(
+      "click",
+      () => {
+
+        closeBookingModal();
+
+      }
+    );
+
+
+    saveBookingButton.addEventListener(
+      "click",
+      () => {
+
+        saveBooking();
+
+      }
+    );
+
+
+    /*
+     * Закрытие по клику
+     * вне окна
+     */
+
+    bookingModal.addEventListener(
+      "click",
+      event => {
+
+        if (
+          event.target ===
+          bookingModal
+        ) {
+
+          closeBookingModal();
+
+        }
+
+      }
+    );
+
+
+    /*
+     * Закрытие клавишей Escape
+     */
+
+    document.addEventListener(
+      "keydown",
+      event => {
+
+        if (
+          event.key === "Escape"
+        ) {
+
+          closeBookingModal();
+
+        }
+
+      }
+    );
+
+    bookingPhone.addEventListener("input", () => {
+
+      let value = bookingPhone.value.replace(/\D/g, "");
+
+      // Если пользователь ввёл 8XXXXXXXXXX
+      if (value.startsWith("8")) {
+        value = "375" + value.substring(1);
+      }
+
+      // Если начал ввод не с 375
+      if (!value.startsWith("375")) {
+        value = "375" + value;
+      }
+
+      value = value.substring(0, 12);
+
+      let result = "+375";
+
+      if (value.length > 3) {
+        result += " (" + value.substring(3, 5);
+      }
+
+      if (value.length >= 5) {
+        result += ") ";
+      }
+
+      if (value.length > 5) {
+        result += value.substring(5, 8);
+      }
+
+      if (value.length > 8) {
+        result += "-" + value.substring(8, 10);
+      }
+
+      if (value.length > 10) {
+        result += "-" + value.substring(10, 12);
+      }
+
+      bookingPhone.value = result;
+
+    });
+    /* =====================================================
+       ЗАПУСК
+    ===================================================== */
+
+    setToday();
+
+    loadBookings();
+
+
+  </script>
+
+</body>
+
+</html>
