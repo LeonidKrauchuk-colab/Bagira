@@ -1106,7 +1106,7 @@ h3,
   color: white;
   background:
     linear-gradient(90deg, rgba(39, 27, 29, .78) 0%, rgba(39, 27, 29, .48) 45%, rgba(39, 27, 29, .18) 100%),
-    url("/images/images_bacground/photo-1604654894610-df63bc536371.avif") center / cover no-repeat;
+    url("/images/photo-1604654894610-df63bc536371.avif") center / cover no-repeat;
 }
 
 .hero-content {
@@ -1148,19 +1148,19 @@ h3,
 .advantage-attentiveness {
   background:
     linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
-    url("/images/images_galeri/2026-09-20\ 23.17.02.jpg") center / cover;
+    url("/images/2026-09-20\ 23.17.02.jpg") center / cover;
 }
 
 .advantage-individual {
   background:
     linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
-    url("/images/images_bacground/photo-1519014816548-bf5fe059798b.avif") center / cover;
+    url("/images/photo-1519014816548-bf5fe059798b.avif") center / cover;
 }
 
 .aadvantage-materials {
   background:
     linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
-    url("/images/images_galeri/2026-09-20\ 23.16.34.jpg") center / cover;
+    url("/images/2026-09-20\ 23.16.34.jpg") center / cover;
 }
 
 .advantage:hover,
@@ -1178,7 +1178,7 @@ h3,
 .services {
   background:
     linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
-    url("/images/images_bacground/photo-1610992015732-2449b76344bc.avif") center / cover fixed;
+    url("/images/photo-1610992015732-2449b76344bc.avif") center / cover fixed;
 }
 
 .services p,
@@ -1213,7 +1213,7 @@ h3,
   color: white;
   background:
     linear-gradient(rgba(249, 240, 239, .7), rgba(249, 240, 239, .7)),
-    url("/images/images_bacground/photo-1600334129128-685c5582fd35.avif") center / cover no-repeat;
+    url("/images/photo-1600334129128-685c5582fd35.avif") center / cover no-repeat;
 }
 
 .about h2 {
@@ -1245,7 +1245,7 @@ h2 {
   color: white;
   background:
     linear-gradient(90deg, rgba(61, 39, 42, .84), rgba(61, 39, 42, .62)),
-    url("/images/images_bacground/photo-1632345031435-8727f6897d53.avif") center / cover no-repeat;
+    url("/images/photo-1632345031435-8727f6897d53.avif") center / cover no-repeat;
 }
 
 .promotion h2 {
@@ -1255,7 +1255,7 @@ h2 {
 .booking {
   background:
     linear-gradient(rgba(249, 240, 239, .7), rgba(249, 240, 239, .7)),
-    url("/images/images_bacground/photo-1519014816548-bf5fe059798b.avif") center / cover;
+    url("/images/photo-1519014816548-bf5fe059798b.avif") center / cover;
 }
 
 .booking-form,
@@ -1310,7 +1310,7 @@ h2 {
     min-height: 600px;
     background:
       linear-gradient(rgba(39, 27, 29, .64), rgba(39, 27, 29, .64)),
-      url("/images/images_bacground/hero_mob.avif") center / cover no-repeat;
+      url("/images/hero_mob.avif") center / cover no-repeat;
   }
 
   .gallery-slide {
