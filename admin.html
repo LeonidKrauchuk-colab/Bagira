@@ -9,6 +9,9 @@
 
   <title>Админ-панель — Багира</title>
 
+  <!-- Google Identity Services: вход через Google -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
 
   <style>
     * {
@@ -582,6 +585,74 @@
     }
 
     /* =========================
+       GOOGLE АВТОРИЗАЦИЯ
+    ========================= */
+
+    #adminApp {
+      display: none;
+    }
+
+    .google-login {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .google-login-card {
+      width: 100%;
+      max-width: 420px;
+      background: white;
+      border-radius: 18px;
+      padding: 30px 24px;
+      text-align: center;
+      box-shadow: 0 10px 35px rgba(0,0,0,.10);
+    }
+
+    .google-login-card h2 {
+      margin-top: 0;
+      color: #67405a;
+    }
+
+    .google-login-card p {
+      color: #777;
+      line-height: 1.5;
+    }
+
+    #googleLoginButton {
+      display: flex;
+      justify-content: center;
+      margin-top: 22px;
+    }
+
+    #loginError {
+      display: none;
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff0f0;
+      color: #c00;
+    }
+
+    .admin-user {
+      margin: -12px 0 18px;
+      text-align: center;
+      color: #777;
+      font-size: 13px;
+    }
+
+    .logout-button {
+      display: block;
+      margin: 8px auto 0;
+      border: none;
+      background: transparent;
+      color: #8b4d78;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* =========================
        МОБИЛЬНАЯ ВЕРСИЯ
     ========================= */
 
@@ -668,7 +739,21 @@
 
 <body>
 
+  <!-- =====================================================
+       ВХОД АДМИНИСТРАТОРА
+       Доступ имеют только два Google-аккаунта, указанные
+       в Apps Script. Оба аккаунта получают одинаковые права.
+  ====================================================== -->
+  <div id="googleLogin" class="google-login">
+    <div class="google-login-card">
+      <h2>🔐 БАГИРА</h2>
+      <p>Для входа в админ-панель используйте разрешённый Google-аккаунт.</p>
+      <div id="googleLoginButton"></div>
+      <div id="loginError"></div>
+    </div>
+  </div>
 
+  <div id="adminApp">
   <div class="container">
 
 
@@ -783,6 +868,7 @@
     <div id="bookingsContainer"></div>
 
 
+  </div>
   </div>
 
 
@@ -955,9 +1041,17 @@
       "https://script.google.com/macros/s/AKfycbx5bk4gWQXRvXjFo8METowWbFTQYh_4AjuyW4TGqEBg7FCzL2WLGICpwerhu0iGvt-C/exec";
 
 
+    /* =====================================================
+       GOOGLE АВТОРИЗАЦИЯ
+    =====================================================
 
-    const ADMIN_API_TOKEN = "BagiraAdmin_2026_irina";
+    // Вставь сюда Client ID из Google Cloud.
+    // Пример: 123456789012-abc123xyz.apps.googleusercontent.com
+    const GOOGLE_CLIENT_ID =
+      "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
 
+    // ID-токен Google хранится только в памяти текущей страницы.
+    let GOOGLE_ID_TOKEN = "";
 
     /* =====================================================
        РАБОЧЕЕ ВРЕМЯ
@@ -1339,7 +1433,17 @@
       try {
 
         const response = await fetch(
-          GOOGLE_SCRIPT_URL + "?t=" + Date.now()
+          GOOGLE_SCRIPT_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify({
+              action: "getAdminBookings",
+              idToken: GOOGLE_ID_TOKEN
+            })
+          }
         );
 
         if (!response.ok) {
@@ -1890,7 +1994,7 @@
           telegram: telegram,
           service: service,
           comment: comment,
-          adminToken: ADMIN_API_TOKEN
+          idToken: GOOGLE_ID_TOKEN
         };
         if (editingBookingId) {
           payload.action = "updateAdminBooking";
@@ -1992,7 +2096,7 @@
             body: JSON.stringify({
               action: "deleteAdminBooking",
               id: id,
-              adminToken: ADMIN_API_TOKEN
+              idToken: GOOGLE_ID_TOKEN
             })
           }
         );
@@ -2246,12 +2350,118 @@
 
     });
     /* =====================================================
+       GOOGLE LOGIN
+    ===================================================== */
+
+    function showLoginError(message) {
+
+      const element =
+        document.getElementById("loginError");
+
+      element.textContent = message;
+      element.style.display = "block";
+
+    }
+
+
+    function handleGoogleCredential(response) {
+
+      if (!response || !response.credential) {
+        showLoginError("Google не вернул данные авторизации.");
+        return;
+      }
+
+      GOOGLE_ID_TOKEN = response.credential;
+
+      verifyAdminAccess();
+
+    }
+
+    // Callback должен быть глобальным, поэтому делаем его window-функцией.
+    window.handleGoogleCredential = handleGoogleCredential;
+
+
+    async function verifyAdminAccess() {
+
+      try {
+
+        const response = await fetch(
+          GOOGLE_SCRIPT_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify({
+              action: "checkAdminAccess",
+              idToken: GOOGLE_ID_TOKEN
+            })
+          }
+        );
+
+        const result = await response.json();
+
+        if (!result.success) {
+          GOOGLE_ID_TOKEN = "";
+          showLoginError(
+            result.error ||
+            "Этот Google-аккаунт не имеет доступа к админ-панели."
+          );
+          return;
+        }
+
+        document.getElementById("googleLogin").style.display = "none";
+        document.getElementById("adminApp").style.display = "block";
+
+        setToday();
+        loadBookings();
+
+      } catch (error) {
+
+        console.error(error);
+        GOOGLE_ID_TOKEN = "";
+        showLoginError(
+          "Не удалось проверить Google-аккаунт. Проверьте URL Apps Script."
+        );
+
+      }
+
+    }
+
+
+    function initGoogleLogin() {
+
+      if (!window.google || !google.accounts || !google.accounts.id) {
+        setTimeout(initGoogleLogin, 300);
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById("googleLoginButton"),
+        {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "signin_with",
+          shape: "rectangular",
+          width: 280
+        }
+      );
+
+    }
+
+
+    /* =====================================================
        ЗАПУСК
     ===================================================== */
 
-    setToday();
-
-    loadBookings();
+    initGoogleLogin();
 
 
   </script>
