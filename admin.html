@@ -607,7 +607,7 @@
       border-radius: 18px;
       padding: 30px 24px;
       text-align: center;
-      box-shadow: 0 10px 35px rgba(0, 0, 0, .10);
+      box-shadow: 0 10px 35px rgba(0,0,0,.10);
     }
 
     .google-login-card h2 {
@@ -754,121 +754,121 @@
   </div>
 
   <div id="adminApp">
-    <div class="container">
+  <div class="container">
 
 
-      <h1>
-        🖥 Админ-панель «Багира»
-      </h1>
+    <h1>
+      🖥 Админ-панель «Багира»
+    </h1>
 
 
-      <!-- =========================
+    <!-- =========================
        ДАТА
   ========================== -->
 
-      <div class="date-panel">
+    <div class="date-panel">
 
 
-        <div class="date-buttons">
+      <div class="date-buttons">
 
 
-          <button id="previousDayButton">
-            ← Предыдущий день
-          </button>
-
-
-          <button id="todayButton">
-            Сегодня
-          </button>
-
-
-          <button id="nextDayButton">
-            Следующий день →
-          </button>
-
-
-        </div>
-
-
-        <input type="date" id="selectedDate" class="date-input">
-
-
-      </div>
-
-
-      <!-- =========================
-       ОБНОВИТЬ
-  ========================== -->
-
-      <div class="refresh-container">
-
-        <button id="refreshButton" class="refresh-button">
-          🔄 Обновить записи
+        <button id="previousDayButton">
+          ← Предыдущий день
         </button>
 
-        <div id="lastUpdated" class="last-updated">
-          Данные ещё не обновлялись
-        </div>
+
+        <button id="todayButton">
+          Сегодня
+        </button>
+
+
+        <button id="nextDayButton">
+          Следующий день →
+        </button>
+
 
       </div>
 
 
-      <!-- =========================
-       СТАТИСТИКА
-  ========================== -->
-
-      <div class="summary">
-
-        <div class="summary-box summary-active">
-          <span class="summary-number" id="activeCount">
-            0
-          </span>
-
-          <span class="summary-title">
-            Активных записей
-          </span>
-        </div>
-
-
-        <div class="summary-box summary-free">
-          <span class="summary-number" id="freeCount">
-            0
-          </span>
-
-          <span class="summary-title">
-            Свободных мест
-          </span>
-        </div>
-
-
-        <div class="summary-box summary-total">
-          <span class="summary-number" id="totalCount">
-            9
-          </span>
-
-          <span class="summary-title">
-            Всего мест
-          </span>
-        </div>
-
-      </div>
-
-
-      <!-- =========================
-       ОШИБКА
-  ========================== -->
-
-      <div id="error" class="error" style="display:none;"></div>
-
-
-      <!-- =========================
-       ЗАПИСИ
-  ========================== -->
-
-      <div id="bookingsContainer"></div>
+      <input type="date" id="selectedDate" class="date-input">
 
 
     </div>
+
+
+    <!-- =========================
+       ОБНОВИТЬ
+  ========================== -->
+
+    <div class="refresh-container">
+
+      <button id="refreshButton" class="refresh-button">
+        🔄 Обновить записи
+      </button>
+
+      <div id="lastUpdated" class="last-updated">
+        Данные ещё не обновлялись
+      </div>
+
+    </div>
+
+
+    <!-- =========================
+       СТАТИСТИКА
+  ========================== -->
+
+    <div class="summary">
+
+      <div class="summary-box summary-active">
+        <span class="summary-number" id="activeCount">
+          0
+        </span>
+
+        <span class="summary-title">
+          Активных записей
+        </span>
+      </div>
+
+
+      <div class="summary-box summary-free">
+        <span class="summary-number" id="freeCount">
+          0
+        </span>
+
+        <span class="summary-title">
+          Свободных мест
+        </span>
+      </div>
+
+
+      <div class="summary-box summary-total">
+        <span class="summary-number" id="totalCount">
+          9
+        </span>
+
+        <span class="summary-title">
+          Всего мест
+        </span>
+      </div>
+
+    </div>
+
+
+    <!-- =========================
+       ОШИБКА
+  ========================== -->
+
+    <div id="error" class="error" style="display:none;"></div>
+
+
+    <!-- =========================
+       ЗАПИСИ
+  ========================== -->
+
+    <div id="bookingsContainer"></div>
+
+
+  </div>
   </div>
 
 
@@ -1040,8 +1040,6 @@
     const GOOGLE_SCRIPT_URL =
       "https://script.google.com/macros/s/AKfycbx5bk4gWQXRvXjFo8METowWbFTQYh_4AjuyW4TGqEBg7FCzL2WLGICpwerhu0iGvt-C/exec";
 
-    const GOOGLE_CLIENT_ID =
-      "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
 
     /* =====================================================
        GOOGLE АВТОРИЗАЦИЯ
@@ -1053,6 +1051,7 @@
       "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
 
     // ID-токен Google хранится только в памяти текущей страницы.
+    // Повторный вход выполняется автоматически через Google Identity Services.
     let GOOGLE_ID_TOKEN = "";
 
     /* =====================================================
@@ -2441,7 +2440,10 @@
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleGoogleCredential,
-        auto_select: false
+        // Если этот Google-аккаунт уже был подтверждён ранее,
+        // Google постарается войти автоматически без повторного выбора аккаунта.
+        auto_select: true,
+        cancel_on_tap_outside: false
       });
 
       google.accounts.id.renderButton(
@@ -2455,6 +2457,15 @@
           width: 280
         }
       );
+
+      // Пытаемся выполнить тихий автоматический вход.
+      // Если Google не может войти автоматически, обычная кнопка
+      // остаётся доступной для ручного входа.
+      google.accounts.id.prompt(function(notification) {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.log("Автоматический вход Google недоступен — используйте кнопку входа.");
+        }
+      });
 
     }
 
