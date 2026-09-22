@@ -1204,6 +1204,12 @@ h3,
     url("images/bacground_images/pedicure.jpg") center / cover no-repeat
 }
 
+.service-depilation {
+  background:
+    linear-gradient(rgba(249, 240, 239, .7), rgba(249, 240, 239, .7)),
+    url("images/bacground_images/depilation.jpeg") center / cover no-repeat
+}
+
 .service-card {
   border: 1px solid rgba(168, 117, 123, .15);
   box-shadow: 0 12px 35px rgba(72, 42, 46, .07);
@@ -1266,10 +1272,15 @@ h2 {
   color: #ffffff;
 }
 
+/* .services {
+  background:
+    linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
+    url("images/bacground_images/hannd.avif") center / cover fixed;
+} */
 .booking {
   background:
     linear-gradient(rgba(249, 240, 239, .7), rgba(249, 240, 239, .7)),
-    url("images/bacground_images/bucing.avif") center / cover;
+    url("images/bacground_images/hannd.avif") center / cover fixed;
 }
 
 .booking-form,
@@ -1495,7 +1506,7 @@ h2 {
   }
 
   .gallery-item img {
-    height: 240px;
+    height: 220px;
   }
 
   /* КНОПКИ НА ТЕЛЕФОНЕ НЕ ПОКАЗЫВАЕМ */
