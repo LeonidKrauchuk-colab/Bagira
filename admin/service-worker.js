@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-admin-v3";
+const CACHE_NAME = "bagira-admin-v4";
 
 const FILES_TO_CACHE = [
   "./admin.html",
@@ -23,7 +23,7 @@ self.addEventListener("install", (event) => {
 
   );
 
-  // Новая версия не ждёт закрытия старой
+  // Новая версия сразу становится активной
   self.skipWaiting();
 
 });
@@ -47,12 +47,33 @@ self.addEventListener("activate", (event) => {
 
       );
 
+    }).then(() => {
+
+      // Сразу начинаем управлять открытой страницей
+      return self.clients.claim();
+
+    }).then(() => {
+
+      // Сообщаем открытым страницам,
+      // что новая версия Service Worker активирована
+      return self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true
+      });
+
+    }).then((clients) => {
+
+      clients.forEach((client) => {
+
+        client.postMessage({
+          type: "UPDATE_AVAILABLE"
+        });
+
+      });
+
     })
 
   );
-
-  // Сразу начинаем управлять открытой страницей
-  self.clients.claim();
 
 });
 
@@ -69,6 +90,10 @@ self.addEventListener("fetch", (event) => {
   }
 
 
+  // ===============================
+  // HTML
+  // ===============================
+
   // HTML всегда сначала пытаемся получить из интернета
   if (event.request.mode === "navigate") {
 
@@ -77,8 +102,7 @@ self.addEventListener("fetch", (event) => {
       fetch(event.request)
         .then((response) => {
 
-          const responseClone =
-            response.clone();
+          const responseClone = response.clone();
 
           caches.open(CACHE_NAME)
             .then((cache) => {
@@ -96,9 +120,9 @@ self.addEventListener("fetch", (event) => {
 
         .catch(() => {
 
-          return caches.match(
-            event.request
-          );
+          // Если интернета нет —
+          // используем сохранённую страницу
+          return caches.match(event.request);
 
         })
 
@@ -108,8 +132,13 @@ self.addEventListener("fetch", (event) => {
   }
 
 
-  // Остальные файлы:
-  // сначала интернет, при отсутствии сети — кэш
+  // ===============================
+  // ОСТАЛЬНЫЕ ФАЙЛЫ
+  // ===============================
+
+  // Сначала интернет,
+  // при отсутствии сети — кэш
+
   event.respondWith(
 
     fetch(event.request)
@@ -118,11 +147,10 @@ self.addEventListener("fetch", (event) => {
         return response;
 
       })
+
       .catch(() => {
 
-        return caches.match(
-          event.request
-        );
+        return caches.match(event.request);
 
       })
 
