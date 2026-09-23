@@ -1913,41 +1913,68 @@ document.querySelectorAll(".gallery-carousel").forEach((carousel) => {
 
 if ("serviceWorker" in navigator) {
 
-  window.addEventListener("load", () => {
+  window.addEventListener("load", async () => {
 
-    navigator.serviceWorker.register("./service-worker.js")
-      .then((registration) => {
+    try {
 
-        console.log(
-          "PWA: Service Worker зарегистрирован",
-          registration
+      const registration =
+        await navigator.serviceWorker.register(
+          "./service-worker.js",
+          {
+            updateViaCache: "none"
+          }
         );
 
-      })
-      .catch((error) => {
-
-        console.error(
-          "PWA: ошибка регистрации Service Worker",
-          error
-        );
-
-      });
-
-  });
+      console.log(
+        "PWA: Service Worker зарегистрирован",
+        registration
+      );
 
 
-  // ===============================
-  // АВТООБНОВЛЕНИЕ
-  // ===============================
+      // Проверяем наличие новой версии
+      // сразу после запуска
+      await registration.update();
 
-  navigator.serviceWorker.addEventListener("message", (event) => {
 
-    if (event.data?.type === "UPDATE_AVAILABLE") {
+      // Проверяем новую версию периодически
+      setInterval(() => {
 
-      window.location.reload();
+        registration.update();
+
+      }, 30000);
+
+
+    } catch (error) {
+
+      console.error(
+        "PWA: ошибка регистрации Service Worker",
+        error
+      );
 
     }
 
   });
+
+
+  // ===============================
+  // АВТОМАТИЧЕСКАЯ ПЕРЕЗАГРУЗКА
+  // ===============================
+
+  let refreshing = false;
+
+  navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => {
+
+      if (refreshing) {
+        return;
+      }
+
+      refreshing = true;
+
+      window.location.reload();
+
+    }
+  );
 
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-site-v1";
+const CACHE_NAME = "bagira-site-v2";
 
 const FILES_TO_CACHE = [
   "./",
@@ -54,25 +54,6 @@ self.addEventListener("activate", (event) => {
 
       // Сразу начинаем управлять страницей
       return self.clients.claim();
-
-    }).then(() => {
-
-      // Сообщаем открытым страницам,
-      // что новая версия активирована
-      return self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true
-      });
-
-    }).then((clients) => {
-
-      clients.forEach((client) => {
-
-        client.postMessage({
-          type: "UPDATE_AVAILABLE"
-        });
-
-      });
 
     })
 
