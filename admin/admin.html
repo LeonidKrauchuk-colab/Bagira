@@ -2483,18 +2483,52 @@
   <script>
     if ("serviceWorker" in navigator) {
 
+      let refreshing = false;
+
+
+      // Когда новый Service Worker становится активным
+      // автоматически перезагружаем страницу
+      navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        () => {
+
+          if (refreshing) {
+            return;
+          }
+
+          refreshing = true;
+
+          console.log(
+            "PWA: обнаружена новая версия — обновление"
+          );
+
+          window.location.reload();
+
+        }
+      );
+
+
       window.addEventListener("load", () => {
 
         navigator.serviceWorker
           .register("./service-worker.js")
-          .then(() => {
-            console.log("PWA: Service Worker зарегистрирован");
+          .then((registration) => {
+
+            console.log(
+              "PWA: Service Worker зарегистрирован"
+            );
+
+            // Проверяем, не появилась ли новая версия
+            registration.update();
+
           })
           .catch((error) => {
+
             console.error(
               "PWA: ошибка регистрации",
               error
             );
+
           });
 
       });

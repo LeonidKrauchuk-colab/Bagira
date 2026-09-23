@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-admin-v2";
+const CACHE_NAME = "bagira-admin-v3";
 
 const FILES_TO_CACHE = [
   "./admin.html",
@@ -6,7 +6,10 @@ const FILES_TO_CACHE = [
 ];
 
 
-// Установка нового Service Worker
+// ===============================
+// УСТАНОВКА
+// ===============================
+
 self.addEventListener("install", (event) => {
 
   event.waitUntil(
@@ -20,13 +23,16 @@ self.addEventListener("install", (event) => {
 
   );
 
-  // Не ждём закрытия старой версии
+  // Новая версия не ждёт закрытия старой
   self.skipWaiting();
 
 });
 
 
-// Активация новой версии
+// ===============================
+// АКТИВАЦИЯ
+// ===============================
+
 self.addEventListener("activate", (event) => {
 
   event.waitUntil(
@@ -45,26 +51,32 @@ self.addEventListener("activate", (event) => {
 
   );
 
-  // Сразу начинаем управлять страницей
+  // Сразу начинаем управлять открытой страницей
   self.clients.claim();
 
 });
 
 
-// Работа с запросами
+// ===============================
+// ЗАПРОСЫ
+// ===============================
+
 self.addEventListener("fetch", (event) => {
 
-  // Для HTML сначала пытаемся получить свежую версию из интернета
-  if (
-    event.request.mode === "navigate"
-  ) {
+  // Работаем только с GET
+  if (event.request.method !== "GET") {
+    return;
+  }
+
+
+  // HTML всегда сначала пытаемся получить из интернета
+  if (event.request.mode === "navigate") {
 
     event.respondWith(
 
       fetch(event.request)
         .then((response) => {
 
-          // Сохраняем свежую страницу
           const responseClone =
             response.clone();
 
@@ -72,7 +84,7 @@ self.addEventListener("fetch", (event) => {
             .then((cache) => {
 
               cache.put(
-                "./admin.html",
+                event.request,
                 responseClone
               );
 
@@ -81,12 +93,11 @@ self.addEventListener("fetch", (event) => {
           return response;
 
         })
+
         .catch(() => {
 
-          // Если интернета нет —
-          // используем сохранённую версию
           return caches.match(
-            "./admin.html"
+            event.request
           );
 
         })
@@ -94,16 +105,19 @@ self.addEventListener("fetch", (event) => {
     );
 
     return;
-
   }
 
 
-  // CSS, JS, картинки и остальные ресурсы
-  // сначала загружаем из сети.
-  // Если сети нет — пробуем кэш.
+  // Остальные файлы:
+  // сначала интернет, при отсутствии сети — кэш
   event.respondWith(
 
     fetch(event.request)
+      .then((response) => {
+
+        return response;
+
+      })
       .catch(() => {
 
         return caches.match(
