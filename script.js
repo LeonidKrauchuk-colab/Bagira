@@ -1907,3 +1907,47 @@ document.querySelectorAll(".gallery-carousel").forEach((carousel) => {
   });
 
 });
+// ===============================
+// PWA — SERVICE WORKER
+// ===============================
+
+if ("serviceWorker" in navigator) {
+
+  window.addEventListener("load", () => {
+
+    navigator.serviceWorker.register("./service-worker.js")
+      .then((registration) => {
+
+        console.log(
+          "PWA: Service Worker зарегистрирован",
+          registration
+        );
+
+      })
+      .catch((error) => {
+
+        console.error(
+          "PWA: ошибка регистрации Service Worker",
+          error
+        );
+
+      });
+
+  });
+
+
+  // ===============================
+  // АВТООБНОВЛЕНИЕ
+  // ===============================
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+
+    if (event.data?.type === "UPDATE_AVAILABLE") {
+
+      window.location.reload();
+
+    }
+
+  });
+
+}
