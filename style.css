@@ -238,9 +238,8 @@ textarea {
 
 
   background:
-    linear-gradient(135deg,
-      #f8e9ed,
-      #fff);
+    linear-gradient(90deg, rgba(39, 27, 29, .78) 0%, rgba(39, 27, 29, .48) 45%, rgba(39, 27, 29, .18) 100%),
+    url("images/bacground_images/hero.avif") center / cover no-repeat;
 }
 
 .hero-content {
@@ -1106,7 +1105,7 @@ h3,
   color: white;
   background:
     linear-gradient(90deg, rgba(39, 27, 29, .78) 0%, rgba(39, 27, 29, .48) 45%, rgba(39, 27, 29, .18) 100%),
-    url("images/photo-1604654894610-df63bc536371.avif") center / cover no-repeat;
+    url("images/bacground_images/hero.avif") center / cover no-repeat;
 }
 
 .hero-content {
