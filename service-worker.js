@@ -1,57 +1,55 @@
 const CACHE_NAME = "bagira-admin-v1";
 
-const APP_FILES = [
-  "./",
+const FILES_TO_CACHE = [
   "./admin.html",
-  "./manifest.json",
-  "./favicon.ico",
-  "./favicon-16x16.png",
-  "./favicon-32x32.png",
-  "./favicon-48x48.png",
-  "./favicon-64x64.png",
-  "./apple-touch-icon.png",
-  "./android-chrome-192x192.png",
-  "./android-chrome-512x512.png"
+  "./manifest.json"
 ];
 
-self.addEventListener("install", event => {
+self.addEventListener("install", (event) => {
+
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_FILES))
-      .then(() => self.skipWaiting())
+      .then((cache) => {
+        return cache.addAll(FILES_TO_CACHE);
+      })
   );
+
+  self.skipWaiting();
 });
 
-self.addEventListener("activate", event => {
+
+self.addEventListener("activate", (event) => {
+
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
-  );
-});
+    caches.keys().then((cacheNames) => {
 
-self.addEventListener("fetch", event => {
-  const request = event.request;
+      return Promise.all(
 
-  if (
-    request.method !== "GET" ||
-    request.url.includes("script.google.com") ||
-    request.url.includes("googleapis.com")
-  ) return;
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
 
-  event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached;
+      );
 
-      return fetch(request).then(response => {
-        if (response && response.status === 200 && response.type === "basic") {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-        }
-        return response;
-      }).catch(() => caches.match("./admin.html"));
     })
   );
+
+  self.clients.claim();
+});
+
+
+self.addEventListener("fetch", (event) => {
+
+  event.respondWith(
+
+    caches.match(event.request)
+      .then((cachedResponse) => {
+
+        return cachedResponse ||
+          fetch(event.request);
+
+      })
+
+  );
+
 });
