@@ -2,824 +2,567 @@
 <html lang="ru">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>БАГИРА — маникюр, педикюр, депиляция</title>
-  <!-- Favicon -->
-  <link rel="icon" href="images/bagira_favicons/favicon.ico" sizes="any">
-
-  <link rel="icon" type="image/png" sizes="16x16" href="images/bagira_favicons/favicon-16.png">
-
-  <link rel="icon" type="image/png" sizes="32x32" href="images/bagira_favicons/favicon-32.png">
-
-  <link rel="icon" type="image/png" sizes="48x48" href="images/bagira_favicons/favicon-48.png">
-
-  <link rel="apple-touch-icon" sizes="180x180" href="images/bagira_favicons/apple-touch-icon.png">
-
-  <link rel="icon" type="image/png" sizes="192x192" href="images/bagira_favicons/icon-192.png">
-
-  <link rel="icon" type="image/png" sizes="512x512" href="images/bagira_favicons/icon-512.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <!-- PWA -->
-  <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#111111">
-  <meta name="mobile-web-app-capable" content="yes">
+      <meta charset="utf-8" />
+      <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+      <title>
+            БАГИРА — маникюр, педикюр, депиляция
+      </title>
+      <!-- Favicon -->
+      <link href="images/bagira_favicons/favicon.ico" rel="icon" sizes="any" />
+      <link href="images/bagira_favicons/favicon-16.png" rel="icon" sizes="16x16" type="image/png" />
+      <link href="images/bagira_favicons/favicon-32.png" rel="icon" sizes="32x32" type="image/png" />
+      <link href="images/bagira_favicons/favicon-48.png" rel="icon" sizes="48x48" type="image/png" />
+      <link href="images/bagira_favicons/apple-touch-icon.png" rel="apple-touch-icon" sizes="180x180" />
+      <link href="images/bagira_favicons/icon-192.png" rel="icon" sizes="192x192" type="image/png" />
+      <link href="images/bagira_favicons/icon-512.png" rel="icon" sizes="512x512" type="image/png" />
+      <link href="https://fonts.googleapis.com" rel="preconnect" />
+      <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap"
+            rel="stylesheet" />
+      <link href="style.css" rel="stylesheet" />
+      <!-- PWA -->
+      <link href="./manifest.json" rel="manifest" />
+      <meta content="#111111" name="theme-color" />
+      <meta content="yes" name="mobile-web-app-capable" />
 </head>
 
 <body>
-
-  <!-- ================= HEADER ================= -->
-
-  <header class="header">
-
-    <div class="container header-inner">
-
-      <a href="#" class="logo">
-        <img src="images/logo_images/logo.png" width="70" alt="logo">
-      </a>
-
-      <!-- Навигация -->
-      <nav class="nav" id="nav">
-
-        <a href="#about">О нас</a>
-
-        <a href="#services">Услуги</a>
-
-        <a href="#gallery">Галерея</a>
-
-        <a href="#reviews">Отзывы</a>
-
-
-      </nav>
-
-
-      <!-- Правая часть header -->
-
-      <div class="header-actions">
-
-        <!-- Телефон -->
-        <a href="tel:+375445387195" class="phone">
-          <span class="phone-icon">📞</span>
-
-          <span class="phone-number">
-            +375 44 538-71-95
-          </span>
-        </a>
-
-
-        <!-- Кнопка записи -->
-        <a href="#booking" class="header-booking">
-          Записаться
-        </a>
-
-
-        <!-- Бургер -->
-        <button class="burger" id="burger" aria-label="Открыть меню" aria-expanded="false">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-
-      </div>
-
-    </div>
-
-  </header>
-
-
-  <!-- ================= HERO ================= -->
-
-  <main>
-
-    <section class="hero">
-
-      <img src="images/logo_images/logo.png" class="logo_hero" alt="logo">
-      <span class="span_hero">Багира</span>
-      <div class="container hero-content">
-
-        <p class="hero-subtitle">
-          Маникюр • Педикюр • Депиляция
-        </p>
-
-        <h1>
-          Красота начинается
-          <br>
-          с заботы о себе
-        </h1>
-
-        <p class="hero-text">
-          Ухоженные руки, ножки и гладкая кожа —
-          время уделить внимание себе.
-        </p>
-
-        <a href="#booking" class="main-button">
-          Записаться
-        </a>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= ПРЕИМУЩЕСТВА ================= -->
-
-    <section class="advantages">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Почему выбирают нас
-          </p>
-
-          <h2>
-            Забота о каждой клиентке
-          </h2>
-
-        </div>
-
-
-        <div class="advantages-grid">
-
-          <div class="advantage advantage-individual">
-
-            <div class="advantage-icon ">
-              ♡
+      <!-- ================= HEADER ================= -->
+      <header class="header">
+            <div class="container header-inner">
+                  <a class="logo" href="#">
+                        <img alt="logo" src="images/logo_images/logo.png" width="70" />
+                  </a>
+                  <!-- Навигация -->
+                  <nav class="nav" id="nav">
+                        <a href="#about">
+                              О нас
+                        </a>
+                        <a href="#services">
+                              Услуги
+                        </a>
+                        <a href="#gallery">
+                              Галерея
+                        </a>
+                        <a href="#reviews">
+                              Отзывы
+                        </a>
+                        <a href="#contacts">
+                              Контакты
+                        </a>
+                  </nav>
+                  <!-- Правая часть header -->
+                  <div class="header-actions">
+                        <!-- Телефон -->
+                        <a class="phone" href="tel:+375445387195">
+                              <span class="phone-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                          <path d="M6.5 3.5h2.2c.5 0 .9.3 1 .8l.9 3.1c.1.4 0 .8-.3 1.1L8.8 9.9c1.1 2.2 2.9 4 5.1 5.1l1.4-1.5c.3-.3.7-.4 1.1-.3l3.1.9c.5.1.8.5.8 1v2.2c0 .6-.4 1-1 1C12.1 18.3 5.7 11.9 5.7 4.5c0-.6.4-1 1-1Z"
+                                                stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                                                stroke-linejoin="round" />
+                                    </svg>
+                              </span>
+                              <span class="phone-number">
+                                    +375 44 538-71-95
+                              </span>
+                        </a>
+                        <!-- Кнопка записи -->
+                        <a class="header-booking" href="#booking">
+                              Записаться
+                        </a>
+                        <!-- Бургер -->
+                        <button aria-expanded="false" aria-label="Открыть меню" class="burger" id="burger">
+                              <span>
+                              </span>
+                              <span>
+                              </span>
+                              <span>
+                              </span>
+                        </button>
+                  </div>
             </div>
-
-            <h3>
-              Индивидуальный подход
-            </h3>
-
-            <p>
-              Подбираем процедуру
-              с учётом ваших пожеланий.
-            </p>
-
-          </div>
-
-
-          <div class="advantage aadvantage-materials">
-
-            <div class="advantage-icon">
-              ✦
+      </header>
+      <!-- ================= HERO ================= -->
+      <main>
+            <section class="hero">
+                  <img alt="logo" class="logo_hero" src="images/logo_images/logo.png" />
+                  <span class="span_hero">
+                        Багира
+                  </span>
+                  <div class="container hero-content">
+                        <p class="hero-subtitle">
+                              Маникюр • Педикюр • Депиляция
+                        </p>
+                        <h1>
+                              Красота начинается
+                              <br />
+                              с заботы о себе
+                        </h1>
+                        <p class="hero-text">
+                              Ухоженные руки, ножки и гладкая кожа —
+                              время уделить внимание себе.
+                        </p>
+                        <a class="main-button" href="#booking">
+                              Записаться
+                        </a>
+                  </div>
+            </section>
+            <!-- ================= ПРЕИМУЩЕСТВА ================= -->
+            <section class="advantages">
+                  <div class="container">
+                        <div class="section-title">
+                              <p>
+                                    Почему выбирают нас
+                              </p>
+                              <h2>
+                                    Забота о каждой клиенткее
+                              </h2>
+                        </div>
+                        <div class="advantages-grid">
+                              <div class="advantage advantage-individual">
+                                    <div class="advantage-icon">
+                                          ♡
+                                    </div>
+                                    <h3>
+                                          Индивидуальный подход
+                                    </h3>
+                                    <p>
+                                          Подбираем процедуру
+                                          с учётом ваших пожеланий.
+                                    </p>
+                              </div>
+                              <div class="advantage advantage-materials">
+                                    <div class="advantage-icon">
+                                          ✦
+                                    </div>
+                                    <h3>
+                                          Качественные материалы
+                                    </h3>
+                                    <p>
+                                          Используем проверенные
+                                          материалы и косметику.
+                                    </p>
+                              </div>
+                              <div class="advantage advantage-attentiveness">
+                                    <div class="advantage-icon">
+                                          ✓
+                                    </div>
+                                    <h3>
+                                          Аккуратность
+                                    </h3>
+                                    <p>
+                                          Внимательно относимся
+                                          к каждой детали.
+                                    </p>
+                              </div>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= УСЛУГИ ================= -->
+            <section class="services" id="services">
+                  <div class="container">
+                        <div class="section-title">
+                              <p>
+                                    Наши услуги
+                              </p>
+                              <h2>
+                                    Выберите процедуру
+                              </h2>
+                        </div>
+                        <div class="services-grid">
+                              <!-- Маникюр -->
+                              <article class="service-card service-manicure">
+                                    <div class="service-icon">
+                                          💅
+                                    </div>
+                                    <h3>
+                                          Маникюр
+                                    </h3>
+                                    <p>
+                                          Уход за руками,
+                                          ногтями и кутикулой.
+                                    </p>
+                                    <a class="service-button" data-service="Маникюр" href="#booking">
+                                          Записаться
+                                    </a>
+                              </article>
+                              <!-- Педикюр -->
+                              <article class="service-card service-pedicure">
+                                    <div class="service-icon">
+                                          🦶
+                                    </div>
+                                    <h3>
+                                          Педикюр
+                                    </h3>
+                                    <p>
+                                          Уход за стопами
+                                          и ногтями ног.
+                                    </p>
+                                    <a class="service-button" data-service="Педикюр" href="#booking">
+                                          Записаться
+                                    </a>
+                              </article>
+                              <!-- Депиляция -->
+                              <article class="service-card service-depilation">
+                                    <div class="service-icon">
+                                          ✨
+                                    </div>
+                                    <h3>
+                                          Депиляция
+                                    </h3>
+                                    <p>
+                                          Гладкая кожа
+                                          и бережный уход.
+                                    </p>
+                                    <a class="service-button" data-service="Депиляция" href="#booking">
+                                          Записаться
+                                    </a>
+                              </article>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= О НАС ================= -->
+            <section class="about" id="about">
+                  <div class="container about-content">
+                        <div>
+                              <p class="section-label">
+                                    О нас
+                              </p>
+                              <h2>
+                                    Место, где можно
+                                    посвятить время себе
+                              </h2>
+                        </div>
+                        <div>
+                              <p>
+                                    БАГИРА — это пространство
+                                    красоты и ухода за собой.
+                              </p>
+                              <p>
+                                    Здесь можно расслабиться,
+                                    привести себя в порядок
+                                    и просто провести время
+                                    с удовольствием.
+                              </p>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= ГАЛЕРЕЯ ================= -->
+            <section class="gallery" id="gallery">
+                  <div class="container">
+                        <div class="section-title">
+                              <p>
+                                    Галерея
+                              </p>
+                              <h2>
+                                    Наши работы
+                              </h2>
+                        </div>
+                        <div class="gallery-carousels">
+                              <!-- Карусель 1 -->
+                              <div class="gallery-carousel">
+                                    <button class="gallery-prev">
+                                          ←
+                                    </button>
+                                    <div class="gallery-track">
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/1.avif" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/2.jpg" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/3.avif" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/4.jpg" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/5.jpg" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/6.jpg" />
+                                          </div>
+                                          <div class="gallery-item">
+                                                <img alt="картинка" src="images/galery_images/7.jpg" />
+                                          </div>
+                                          <!-- ещё фотографии -->
+                                    </div>
+                                    <button class="gallery-next">
+                                          →
+                                    </button>
+                              </div>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= ОТЗЫВЫ ================= -->
+            <section class="reviews" id="reviews">
+                  <div class="container">
+                        <div class="section-title">
+                              <p>
+                                    Отзывы
+                              </p>
+                              <h2>
+                                    Что говорят клиенты
+                              </h2>
+                        </div>
+                        <div class="reviews-grid">
+                              <div class="review">
+                                    <div class="stars">
+                                          ★★★★★
+                                    </div>
+                                    <p>
+                                          Очень понравилось.
+                                          Всё аккуратно и красиво.
+                                    </p>
+                                    <strong>
+                                          Анна
+                                    </strong>
+                              </div>
+                              <div class="review">
+                                    <div class="stars">
+                                          ★★★★★
+                                    </div>
+                                    <p>
+                                          Приятная атмосфера
+                                          и отличный результат.
+                                    </p>
+                                    <strong>
+                                          Марина
+                                    </strong>
+                              </div>
+                              <div class="review">
+                                    <div class="stars">
+                                          ★★★★★
+                                    </div>
+                                    <p>
+                                          Обязательно приду ещё.
+                                          Спасибо за работу!
+                                    </p>
+                                    <strong>
+                                          Ольга
+                                    </strong>
+                              </div>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= АКЦИЯ ================= -->
+            <section class="promotion">
+                  <div class="container promotion-content">
+                        <div>
+                              <p>
+                                    Специальное предложение
+                              </p>
+                              <h2>
+                                    Время для себя —
+                                    это всегда хорошая идея
+                              </h2>
+                        </div>
+                        <a class="main-button" href="#booking">
+                              Записаться
+                        </a>
+                  </div>
+            </section>
+            <!-- ================= ЗАПИСЬ ================= -->
+            <section class="booking" id="booking">
+                  <div class="container">
+                        <div class="section-title">
+                              <p>
+                                    Онлайн-запись
+                              </p>
+                              <h2>
+                                    Запишитесь на процедуру
+                              </h2>
+                        </div>
+                        <form class="booking-form" id="bookingForm">
+                              <!-- Услуга -->
+                              <div class="form-group">
+                                    <label for="service">
+                                          Услуга
+                                    </label>
+                                    <select id="service" required="">
+                                          <option value="">
+                                                Выберите услугу
+                                          </option>
+                                          <option value="Маникюр">
+                                                Маникюр
+                                          </option>
+                                          <option value="Педикюр">
+                                                Педикюр
+                                          </option>
+                                          <option value="Депиляция">
+                                                Депиляция
+                                          </option>
+                                    </select>
+                              </div>
+                              <!-- Дата -->
+                              <div class="form-group">
+                                    <label for="date">
+                                          Дата
+                                    </label>
+                                    <input id="date" required="" type="date" />
+                              </div>
+                              <!-- Время -->
+                              <div class="form-group">
+                                    <label>
+                                          Время
+                                    </label>
+                                    <div class="time-list" id="timeList">
+                                          <button class="time-button" data-time="10:00" type="button">
+                                                10:00
+                                          </button>
+                                          <button class="time-button" data-time="11:00" type="button">
+                                                11:00
+                                          </button>
+                                          <button class="time-button" data-time="12:00" type="button">
+                                                12:00
+                                          </button>
+                                          <button class="time-button" data-time="13:00" type="button">
+                                                13:00
+                                          </button>
+                                          <button class="time-button" data-time="14:00" type="button">
+                                                14:00
+                                          </button>
+                                          <button class="time-button" data-time="15:00" type="button">
+                                                15:00
+                                          </button>
+                                          <button class="time-button" data-time="16:00" type="button">
+                                                16:00
+                                          </button>
+                                          <button class="time-button" data-time="17:00" type="button">
+                                                17:00
+                                          </button>
+                                          <button class="time-button" data-time="18:00" type="button">
+                                                18:00
+                                          </button>
+                                    </div>
+                                    <input id="selectedTime" required="" type="hidden" />
+                              </div>
+                              <!-- Имя -->
+                              <div class="form-group">
+                                    <label for="name">
+                                          Ваше имя
+                                    </label>
+                                    <input id="name" placeholder="Введите имя" required="" type="text" />
+                              </div>
+                              <!-- Телефон -->
+                              <div class="form-group">
+                                    <label for="phone">
+                                          Телефон
+                                    </label>
+                                    <input autocomplete="tel" id="phone" name="phone" placeholder="+375" type="tel" />
+                              </div>
+                              <!-- Telegram -->
+                              <div class="form-group">
+                                    <label for="telegram">
+                                          Telegram
+                                    </label>
+                                    <input id="telegram" placeholder="@username" type="text" />
+                              </div>
+                              <!-- Комментарий -->
+                              <div class="form-group">
+                                    <label for="comment">
+                                          Комментарий
+                                    </label>
+                                    <textarea id="comment" placeholder="Дополнительная информация" rows="4"></textarea>
+                              </div>
+                              <!-- Ошибка -->
+                              <div class="form-error" id="formError">
+                              </div>
+                              <!-- Кнопка -->
+                              <button class="submit-button" type="submit">
+                                    Записаться
+                              </button>
+                        </form>
+                        <!-- Успешная запись -->
+                        <div class="booking-success" id="bookingSuccess">
+                              <h3>
+                                    Запись успешно создана!
+                              </h3>
+                              <div id="bookingDetails">
+                              </div>
+                              <button class="main-button" id="newBooking" type="button">
+                                    Новая запись
+                              </button>
+                        </div>
+                  </div>
+            </section>
+            <!-- ================= КОНТАКТЫ ================= -->
+            <section class="contacts" id="contacts">
+                  <div class="contacts-card">
+                        <h3>
+                              Контакты
+                        </h3>
+                        <div class="contact-info">
+                              <div class="contact-item">
+                                    <span class="contact-label">
+                                          Телефон
+                                    </span>
+                                    <a href="tel:+375445387195">
+                                          +375 (44) 538-71-95
+                                    </a>
+                              </div>
+                              <div class="contact-item">
+                                    <span class="contact-label">
+                                          Время работы
+                                    </span>
+                                    <span>
+                                          10:00 — 19:00
+                                    </span>
+                              </div>
+                        </div>
+                        <div class="social-links">
+                              <!-- Telegram -->
+                              <a aria-label="Telegram" class="social-icon telegram"
+                                    href="https://t.me/irina_krav4uk_lojko" rel="noopener noreferrer" target="_blank"
+                                    title="Telegram">
+                                    <svg aria-hidden="true" viewbox="0 0 24 24">
+                                          <path
+                                                d="M21.8 3.2 18.6 20c-.2 1.2-.9 1.5-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1 9.2-8.3c.4-.4-.1-.6-.6-.2L6 13.6 1 12c-1.1-.3-1.1-1.1.2-1.6L20.6 3c.9-.3 1.7.2 1.2.2z">
+                                          </path>
+                                    </svg>
+                              </a>
+                              <!-- Instagram -->
+                              <a aria-label="Instagram" class="social-icon instagram"
+                                    href="https://www.instagram.com/irina_krav4uk_lojko" rel="noopener noreferrer"
+                                    target="_blank" title="Instagram">
+                                    <svg aria-hidden="true" viewbox="0 0 24 24">
+                                          <rect height="18" rx="5" width="18" x="3" y="3">
+                                          </rect>
+                                          <circle cx="12" cy="12" r="4">
+                                          </circle>
+                                          <circle cx="17.5" cy="6.5" r="1">
+                                          </circle>
+                                    </svg>
+                              </a>
+                              <!-- TikTok -->
+                              <a aria-label="TikTok" class="social-icon tiktok"
+                                    href="https://www.tiktok.com/@irina_krav4uk_lojko" rel="noopener noreferrer"
+                                    target="_blank" title="TikTok">
+                                    <svg aria-hidden="true" viewbox="0 0 24 24">
+                                          <path
+                                                d="M16 3c.4 2.2 1.6 3.6 4 3.8v3.1c-1.5 0-2.8-.4-4-1.2v6.7c0 3.8-2.8 6.1-6.1 6.1A5.9 5.9 0 0 1 4 15.6c0-3.4 2.7-5.9 6.1-5.9.4 0 .8 0 1.2.1V13a3.1 3.1 0 0 0-1.2-.2c-1.5 0-2.8 1.2-2.8 2.8s1.2 2.8 2.8 2.8c1.6 0 2.8-1 2.8-3.1V3H16z">
+                                          </path>
+                                    </svg>
+                              </a>
+                        </div>
+                  </div>
+            </section>
+      </main>
+      <!-- Мобильная фиксированная кнопка записи -->
+      <!-- ================= FOOTER ================= -->
+      <footer class="footer">
+            <div class="container">
+                  <p>
+                        © 2026 БАГИРА
+                  </p>
+                  <p>
+                        Маникюр • Педикюр • Депиляция
+                  </p>
             </div>
-
-            <h3>
-              Качественные материалы
-            </h3>
-
-            <p>
-              Используем проверенные
-              материалы и косметику.
-            </p>
-
-          </div>
-
-
-          <div class="advantage advantage-attentiveness">
-
-            <div class="advantage-icon">
-              ✓
-            </div>
-
-            <h3>
-              Аккуратность
-            </h3>
-
-            <p>
-              Внимательно относимся
-              к каждой детали.
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= УСЛУГИ ================= -->
-
-    <section class="services" id="services">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Наши услуги
-          </p>
-
-          <h2>
-            Выберите процедуру
-          </h2>
-
-        </div>
-
-
-        <div class="services-grid">
-
-
-          <!-- Маникюр -->
-
-          <article class="service-card service-manicure">
-
-            <div class="service-icon">
-              💅
-            </div>
-
-            <h3>
-              Маникюр
-            </h3>
-
-            <p>
-              Уход за руками,
-              ногтями и кутикулой.
-            </p>
-
-            <a href="#booking" class="service-button" data-service="Маникюр">
-              Записаться
-            </a>
-
-          </article>
-
-
-          <!-- Педикюр -->
-
-          <article class="service-card service-pedicure">
-
-            <div class="service-icon">
-              🦶
-            </div>
-
-            <h3>
-              Педикюр
-            </h3>
-
-            <p>
-              Уход за стопами
-              и ногтями ног.
-            </p>
-
-            <a href="#booking" class="service-button" data-service="Педикюр">
-              Записаться
-            </a>
-
-          </article>
-
-
-          <!-- Депиляция -->
-
-          <article class="service-card service-depilation">
-
-            <div class="service-icon">
-              ✨
-            </div>
-
-            <h3>
-              Депиляция
-            </h3>
-
-            <p>
-              Гладкая кожа
-              и бережный уход.
-            </p>
-
-            <a href="#booking" class="service-button" data-service="Депиляция">
-              Записаться
-            </a>
-
-          </article>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= О НАС ================= -->
-
-    <section class="about" id="about">
-
-      <div class="container about-content">
-
-        <div>
-
-          <p class="section-label">
-            О нас
-          </p>
-
-          <h2>
-            Место, где можно
-            посвятить время себе
-          </h2>
-
-        </div>
-
-
-        <div>
-
-          <p>
-            БАГИРА — это пространство
-            красоты и ухода за собой.
-          </p>
-
-          <p>
-            Здесь можно расслабиться,
-            привести себя в порядок
-            и просто провести время
-            с удовольствием.
-          </p>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= ГАЛЕРЕЯ ================= -->
-
-    <section class="gallery" id="gallery">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Галерея
-          </p>
-
-          <h2>
-            Наши работы
-          </h2>
-
-        </div>
-
-
-        <div class="gallery-carousels">
-
-          <!-- Карусель 1 -->
-          <div class="gallery-carousel">
-
-            <button class="gallery-prev">
-              ←
-            </button>
-
-            <div class="gallery-track">
-
-              <div class="gallery-item">
-                <img src="images/galery_images/1.avif " alt="картинка">
-              </div>
-
-              <div class="gallery-item">
-                <img src="images/galery_images/2.jpg " alt="картинка">
-              </div>
-              <div class="gallery-item">
-                <img src="images/galery_images/3.avif " alt="картинка">
-              </div>
-              <div class="gallery-item">
-                <img src="images/galery_images/4.jpg " alt="картинка">
-              </div>
-              <div class="gallery-item">
-                <img src="images/galery_images/5.jpg " alt="картинка">
-              </div>
-              <div class="gallery-item">
-                <img src="images/galery_images/6.jpg " alt="картинка">
-              </div>
-              <div class="gallery-item">
-                <img src="images/galery_images/7.jpg " alt="картинка">
-              </div>
-
-              <!-- ещё фотографии -->
-
-            </div>
-
-            <button class="gallery-next">
-              →
-            </button>
-
-          </div>
-
-
-
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= ОТЗЫВЫ ================= -->
-
-    <section class="reviews" id="reviews">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Отзывы
-          </p>
-
-          <h2>
-            Что говорят клиенты
-          </h2>
-
-        </div>
-
-
-        <div class="reviews-grid">
-
-
-          <div class="review">
-
-            <div class="stars">
-              ★★★★★
-            </div>
-
-            <p>
-              Очень понравилось.
-              Всё аккуратно и красиво.
-            </p>
-
-            <strong>
-              Анна
-            </strong>
-
-          </div>
-
-
-          <div class="review">
-
-            <div class="stars">
-              ★★★★★
-            </div>
-
-            <p>
-              Приятная атмосфера
-              и отличный результат.
-            </p>
-
-            <strong>
-              Марина
-            </strong>
-
-          </div>
-
-
-          <div class="review">
-
-            <div class="stars">
-              ★★★★★
-            </div>
-
-            <p>
-              Обязательно приду ещё.
-              Спасибо за работу!
-            </p>
-
-            <strong>
-              Ольга
-            </strong>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= АКЦИЯ ================= -->
-
-    <section class="promotion">
-
-      <div class="container promotion-content">
-
-        <div>
-
-          <p>
-            Специальное предложение
-          </p>
-
-          <h2>
-            Время для себя —
-            это всегда хорошая идея
-          </h2>
-
-        </div>
-
-        <a href="#booking" class="main-button">
-          Записаться
-        </a>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= ЗАПИСЬ ================= -->
-
-    <section class="booking" id="booking">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Онлайн-запись
-          </p>
-
-          <h2>
-            Запишитесь на процедуру
-          </h2>
-
-        </div>
-
-
-        <form id="bookingForm" class="booking-form">
-
-          <!-- Услуга -->
-
-          <div class="form-group">
-
-            <label for="service">
-              Услуга
-            </label>
-
-            <select id="service" required>
-
-              <option value="">
-                Выберите услугу
-              </option>
-
-              <option value="Маникюр">
-                Маникюр
-              </option>
-
-              <option value="Педикюр">
-                Педикюр
-              </option>
-
-              <option value="Депиляция">
-                Депиляция
-              </option>
-
-            </select>
-
-          </div>
-
-
-          <!-- Дата -->
-
-          <div class="form-group">
-
-            <label for="date">
-              Дата
-            </label>
-
-            <input type="date" id="date" required>
-
-          </div>
-
-
-          <!-- Время -->
-
-          <div class="form-group">
-
-            <label>
-              Время
-            </label>
-
-            <div class="time-list" id="timeList">
-
-              <button type="button" class="time-button" data-time="10:00">
-                10:00
-              </button>
-
-              <button type="button" class="time-button" data-time="11:00">
-                11:00
-              </button>
-
-              <button type="button" class="time-button" data-time="12:00">
-                12:00
-              </button>
-
-              <button type="button" class="time-button" data-time="13:00">
-                13:00
-              </button>
-
-              <button type="button" class="time-button" data-time="14:00">
-                14:00
-              </button>
-
-              <button type="button" class="time-button" data-time="15:00">
-                15:00
-              </button>
-
-              <button type="button" class="time-button" data-time="16:00">
-                16:00
-              </button>
-
-              <button type="button" class="time-button" data-time="17:00">
-                17:00
-              </button>
-
-              <button type="button" class="time-button" data-time="18:00">
-                18:00
-              </button>
-
-            </div>
-
-            <input type="hidden" id="selectedTime" required>
-
-          </div>
-
-
-          <!-- Имя -->
-
-          <div class="form-group">
-
-            <label for="name">
-              Ваше имя
-            </label>
-
-            <input type="text" id="name" placeholder="Введите имя" required>
-
-          </div>
-
-
-          <!-- Телефон -->
-
-          <div class="form-group">
-
-            <label for="phone">
-              Телефон
-            </label>
-
-            <input type="tel" id="phone" name="phone" placeholder="+375" autocomplete="tel">
-
-          </div>
-
-
-          <!-- Telegram -->
-
-          <div class="form-group">
-
-            <label for="telegram">
-              Telegram
-            </label>
-
-            <input type="text" id="telegram" placeholder="@username">
-
-          </div>
-
-
-          <!-- Комментарий -->
-
-          <div class="form-group">
-
-            <label for="comment">
-              Комментарий
-            </label>
-
-            <textarea id="comment" rows="4" placeholder="Дополнительная информация"></textarea>
-
-          </div>
-
-
-          <!-- Ошибка -->
-
-          <div id="formError" class="form-error"></div>
-
-
-          <!-- Кнопка -->
-
-          <button type="submit" class="submit-button">
-            Записаться
-          </button>
-
-        </form>
-
-
-        <!-- Успешная запись -->
-
-        <div id="bookingSuccess" class="booking-success">
-
-          <h3>
-            Запись успешно создана!
-          </h3>
-
-          <div id="bookingDetails"></div>
-
-          <button type="button" id="newBooking" class="main-button">
-            Новая запись
-          </button>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- ================= КОНТАКТЫ ================= -->
-
-    <section class="contacts" id="contacts">
-
-      <div class="container">
-
-        <div class="section-title">
-
-          <p>
-            Контакты
-          </p>
-
-          <h2>
-            Будем рады вас видеть
-          </h2>
-
-        </div>
-
-
-        <div class="contacts-grid">
-
-          <div>
-            <strong>
-              Телефон
-            </strong>
-
-            <a href="tel:+375445387195">
-              +375 44 538-71-95
-            </a>
-          </div>
-
-
-          <div>
-            <strong>
-              Telegram
-            </strong>
-
-            <a href="#">
-              @telegram
-            </a>
-          </div>
-
-
-          <div>
-            <strong>
-              Время работы
-            </strong>
-
-            <span>
-              10:00 — 19:00
-            </span>
-          </div>
-
-        </div>
-
-      </div>
-
-    </section>
-
-  </main>
-
-
-  <!-- ================= FOOTER ================= -->
-
-  <footer class="footer">
-
-    <div class="container">
-
-      <p>
-        © 2026 БАГИРА
-      </p>
-
-      <p>
-        Маникюр • Педикюр • Депиляция
-      </p>
-
-    </div>
-
-  </footer>
-
-
-  <script src="script.js"></script>
-
+      </footer>
+      <script src="script.js">
+      </script>
 </body>
 
 </html>

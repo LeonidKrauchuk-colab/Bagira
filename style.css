@@ -28,14 +28,12 @@ textarea {
   font: inherit;
 }
 
-
 /* ================= CONTAINER ================= */
 
 .container {
   width: min(1100px, calc(100% - 40px));
   margin: 0 auto;
 }
-
 
 /* ================= HEADER ================= */
 
@@ -80,17 +78,14 @@ textarea {
 
 }
 
-/* .logo {
-  /* text-decoration: none;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 2px;
-} */
-
 .nav {
   display: flex;
   align-items: center;
   gap: 25px;
+}
+
+.burger {
+  display: none;
 }
 
 .nav a {
@@ -102,7 +97,6 @@ textarea {
 .nav a:hover {
   opacity: 0.6;
 }
-
 
 /* ================= HEADER ACTIONS ================= */
 
@@ -123,7 +117,18 @@ textarea {
 }
 
 .phone-icon {
-  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  fill: currentColor;
 }
 
 .header-booking {
@@ -145,7 +150,6 @@ textarea {
 .header-booking:hover {
   transform: translateY(-2px);
 }
-
 
 /* ================= BURGER ================= */
 
@@ -197,20 +201,6 @@ textarea {
   transform: translateY(-9px) rotate(-45deg);
 }
 
-.burger span {
-  display: block;
-
-  width: 100%;
-  height: 3px;
-
-  background: #222;
-
-  border-radius: 3px;
-
-  transition: 0.3s;
-}
-
-
 /* Бургер превращается в крестик */
 
 .burger.active span:nth-child(1) {
@@ -225,7 +215,6 @@ textarea {
   transform: translateY(-10.5px) rotate(-45deg);
 }
 
-
 /* ================= HERO ================= */
 
 .hero {
@@ -234,16 +223,12 @@ textarea {
   display: flex;
   align-items: center;
 
-
-
-
   background:
     linear-gradient(90deg, rgba(39, 27, 29, .78) 0%, rgba(39, 27, 29, .48) 45%, rgba(39, 27, 29, .18) 100%),
     url("images/bacground_images/hero.avif") center / cover no-repeat;
 }
 
 .hero-content {
-
 
   padding: 80px 0;
 }
@@ -269,7 +254,6 @@ textarea {
 
   font-size: 19px;
 }
-
 
 /* ================= BUTTON ================= */
 
@@ -297,7 +281,6 @@ textarea {
   transform: translateY(-2px);
 }
 
-
 /* ================= SECTION TITLE ================= */
 
 .section-title {
@@ -318,7 +301,6 @@ textarea {
   font-size: 40px;
   line-height: 1.2;
 }
-
 
 /* ================= ADVANTAGES ================= */
 
@@ -353,7 +335,6 @@ textarea {
 .advantage h3 {
   margin-bottom: 10px;
 }
-
 
 /* ================= SERVICES ================= */
 
@@ -414,7 +395,6 @@ textarea {
   text-decoration: none;
 }
 
-
 /* ================= ABOUT ================= */
 
 .about {
@@ -441,88 +421,6 @@ textarea {
   margin-bottom: 15px;
 
   font-size: 18px;
-}
-
-
-/* ================= GALLERY ================= */
-
-.gallery {
-  padding: 100px 0;
-  background: var(--soft);
-}
-
-.gallery-carousels {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
-
-.gallery-carousel {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.gallery-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: calc((100% - 84px) / 4);
-  gap: 20px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  flex: 1;
-  padding: 4px 2px 10px;
-  scroll-snap-type: x mandatory;
-}
-
-.gallery-track::-webkit-scrollbar {
-  display: none;
-}
-
-.gallery-slide {
-  height: 280px;
-  overflow: hidden;
-  border-radius: 15px;
-  background: var(--soft-2);
-  box-shadow: 0 10px 28px rgba(72, 42, 46, .08);
-  scroll-snap-align: start;
-}
-
-.gallery-slide img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-  transition: transform .5s ease;
-}
-
-.gallery-slide:hover img {
-  transform: scale(1.05);
-}
-
-.gallery-arrow {
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .95);
-  color: var(--text);
-  font-size: 32px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: 0 5px 18px rgba(72, 42, 46, .10);
-  transition: .2s ease;
-  z-index: 2;
-}
-
-.gallery-arrow:hover {
-  background: var(--accent-dark);
-  color: white;
-  border-color: var(--accent-dark);
-  transform: scale(1.05);
 }
 
 /* ================= REVIEWS ================= */
@@ -557,7 +455,6 @@ textarea {
   margin-bottom: 20px;
 }
 
-
 /* ================= PROMOTION ================= */
 
 .promotion {
@@ -581,7 +478,6 @@ textarea {
   font-size: 38px;
   line-height: 1.2;
 }
-
 
 /* ================= BOOKING ================= */
 
@@ -638,7 +534,6 @@ textarea {
   border-color: #999;
 }
 
-
 /* ================= TIME ================= */
 
 .time-list {
@@ -679,7 +574,6 @@ textarea {
   opacity: 0.45;
 }
 
-
 /* ================= FORM ERROR ================= */
 
 .form-error {
@@ -689,7 +583,6 @@ textarea {
 
   font-size: 14px;
 }
-
 
 /* ================= SUBMIT ================= */
 
@@ -712,7 +605,6 @@ textarea {
 .submit-button:hover {
   opacity: 0.9;
 }
-
 
 /* ================= SUCCESS ================= */
 
@@ -742,39 +634,6 @@ textarea {
   margin-top: 20px;
 }
 
-
-/* ================= CONTACTS ================= */
-
-.contacts {
-  padding: 100px 0;
-}
-
-.contacts-grid {
-  display: grid;
-
-  grid-template-columns:
-    repeat(3, 1fr);
-
-  gap: 30px;
-}
-
-.contacts-grid>div {
-  padding: 25px;
-
-  border: 1px solid #eee;
-  border-radius: 15px;
-
-  display: flex;
-  flex-direction: column;
-
-  gap: 8px;
-}
-
-.contacts-grid a {
-  text-decoration: none;
-}
-
-
 /* ================= FOOTER ================= */
 
 .footer {
@@ -792,7 +651,6 @@ textarea {
   gap: 20px;
 }
 
-
 /* ================= MOBILE ================= */
 
 @media (max-width: 800px) {
@@ -801,57 +659,103 @@ textarea {
     width: min(100% - 30px, 600px);
   }
 
-
   /* HEADER */
 
+  /* Премиальная мобильная шапка */
   .header-inner {
-    min-height: 65px;
-
-    gap: 10px;
+    min-height: 62px;
+    gap: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .logo {
-    font-size: 22px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
   }
 
+  .logo img {
+    width: 48px;
+    height: 48px;
+    display: block;
+    object-fit: contain;
+  }
 
   .header-actions {
-    gap: 10px;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+    min-width: 0;
   }
 
-
-  /* Телефон только иконкой */
-
+  /* Телефон на мобильном — только аккуратная SVG-иконка */
   .phone {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    border-radius: 50%;
+    background: rgba(43, 36, 37, .06);
     font-size: 0;
+    flex: 0 0 38px;
+    transition: background .2s ease, transform .2s ease;
+  }
+
+  .phone:hover,
+  .phone:active {
+    background: rgba(43, 36, 37, .1);
+    transform: translateY(-1px);
   }
 
   .phone-icon {
-    font-size: 35px;
-    margin-right: 20px;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+  }
+
+  .phone-icon svg {
+    width: 19px;
+    height: 19px;
   }
 
   .phone-number {
     display: none;
   }
 
-
-  /* Кнопка записи */
-
+  /* Кнопка записи остаётся в шапке */
   .header-booking {
-    padding: 8px 12px;
-
-    font-size: 13px;
+    min-height: 38px;
+    padding: 0 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: .2px;
   }
 
-
-  /* BURGER */
-
+  /* Бургер */
   .burger {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
     display: flex;
-    margin-left: 20px;
+    margin: 0;
+    border-radius: 50%;
+    background: rgba(43, 36, 37, .04);
   }
 
+  .burger span {
+    width: 21px;
+    height: 2px;
+  }
 
   /* MENU */
 
@@ -887,11 +791,6 @@ textarea {
     font-size: 18px;
   }
 
-  .mobile-booking {
-    display: block;
-  }
-
-
   /* HERO */
 
   .hero {
@@ -914,7 +813,6 @@ textarea {
     font-size: 17px;
   }
 
-
   /* SECTIONS */
 
   .advantages,
@@ -935,17 +833,11 @@ textarea {
     font-size: 32px;
   }
 
-
   /* GRID */
 
   .advantages-grid,
   .services-grid,
   .reviews-grid,
-  .contacts-grid {
-    grid-template-columns: 1fr;
-  }
-
-
   .about-content {
     grid-template-columns: 1fr;
 
@@ -955,7 +847,6 @@ textarea {
   .about h2 {
     font-size: 34px;
   }
-
 
   /* GALLERY */
 
@@ -967,18 +858,6 @@ textarea {
     grid-auto-columns: calc((100% - 10px) / 2);
     gap: 10px;
   }
-
-  .gallery-slide {
-    height: 220px;
-  }
-
-  .gallery-arrow {
-    flex-basis: 36px;
-    width: 36px;
-    height: 36px;
-    font-size: 27px;
-  }
-
 
   /* PROMOTION */
 
@@ -992,7 +871,6 @@ textarea {
     font-size: 30px;
   }
 
-
   /* FORM */
 
   .booking-form {
@@ -1004,7 +882,6 @@ textarea {
       repeat(2, 1fr);
   }
 
-
   /* FOOTER */
 
   .footer .container {
@@ -1014,7 +891,6 @@ textarea {
   }
 
 }
-
 
 /* ================= VERY SMALL SCREEN ================= */
 
@@ -1035,7 +911,6 @@ textarea {
   }
 
 }
-
 
 /* ================= BAGIRA VISUAL THEME ================= */
 
@@ -1134,8 +1009,6 @@ h3,
 
 }
 
-
-
 .advantage {
   /* background: var(--surface); */
   color: #ffffff;
@@ -1156,13 +1029,11 @@ h3,
     url("images/bacground_images/bucing.avif") center / cover;
 }
 
-.aadvantage-materials {
+.advantage-materials {
   background:
     linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
     url("images/bacground_images/materials.jpg") center / cover;
 }
-
-
 
 .advantage:hover,
 .service-card:hover,
@@ -1240,10 +1111,9 @@ h3,
 }
 
 .about-content p,
-h2 {
+.about h2 {
   color: #030000;
 }
-
 
 .reviews {
   background: var(--bg);
@@ -1271,11 +1141,6 @@ h2 {
   color: #ffffff;
 }
 
-/* .services {
-  background:
-    linear-gradient(90deg, rgba(43, 32, 34, .82), rgba(43, 32, 34, .58)),
-    url("images/bacground_images/hannd.avif") center / cover fixed;
-} */
 .booking {
   background:
     linear-gradient(rgba(249, 240, 239, .7), rgba(249, 240, 239, .7)),
@@ -1312,16 +1177,6 @@ h2 {
 
 .contacts {
   background: var(--bg);
-}
-
-.contacts-grid>div {
-  background: var(--surface);
-  border-color: var(--line);
-  box-shadow: 0 8px 25px rgba(72, 42, 46, .04);
-}
-
-.contacts-grid a:hover {
-  color: var(--accent-dark);
 }
 
 .footer {
@@ -1392,7 +1247,6 @@ h2 {
   transform: scale(1.05);
 }
 
-
 /* ==================================================
    КНОПКИ КАРУСЕЛИ
    ================================================== */
@@ -1460,7 +1314,6 @@ h2 {
   transform: translateY(-50%);
 }
 
-
 /* ==================================================
    МОБИЛЬНАЯ ВЕРСИЯ
    КНОПОК НЕТ — СВАЙП ПАЛЬЦЕМ
@@ -1516,7 +1369,6 @@ h2 {
   }
 }
 
-
 /* ==================================================
    ПЛАНШЕТ / КОМПЬЮТЕР
    ================================================== */
@@ -1550,7 +1402,6 @@ h2 {
   cursor: default;
 }
 
-
 /* Фото */
 
 .lightbox-image {
@@ -1567,7 +1418,6 @@ h2 {
   box-shadow:
     0 10px 50px rgba(0, 0, 0, 0.6);
 }
-
 
 /* =========================================
    КНОПКА ЗАКРЫТИЯ
@@ -1600,7 +1450,6 @@ h2 {
 .lightbox-close:hover {
   background: rgba(255, 255, 255, 0.3);
 }
-
 
 /* =========================================
    СТРЕЛКИ
@@ -1652,7 +1501,6 @@ h2 {
   background: rgba(255, 255, 255, 0.3);
 }
 
-
 /* Неактивная стрелка */
 
 .lightbox-prev:disabled,
@@ -1662,7 +1510,6 @@ h2 {
   cursor: default;
 }
 
-
 /* =========================================
    КУРСОР НА ФОТО
 ========================================= */
@@ -1670,7 +1517,6 @@ h2 {
 .gallery-item img {
   cursor: zoom-in;
 }
-
 
 /* =========================================
    МОБИЛЬНЫЙ
@@ -1713,4 +1559,830 @@ h2 {
     font-size: 30px;
   }
 
+}
+
+/* =========================================
+   CONTACTS + SOCIALS
+========================================= */
+
+/* =========================
+   CONTACTS
+========================= */
+
+.contacts-card {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.contacts-card h3 {
+  margin-bottom: 24px;
+}
+
+.contact-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 60px;
+  margin-bottom: 25px;
+}
+
+.contact-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.contact-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.65;
+}
+
+.contact-item a,
+.contact-item>span:last-child {
+  color: inherit;
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.contact-item a:hover {
+  text-decoration: underline;
+}
+
+/* =========================
+   SOCIAL ICONS
+========================= */
+
+.social-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+.social-icon {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  text-decoration: none;
+
+  background: var(--dark, #222);
+  color: #fff;
+
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    background 0.25s ease;
+}
+
+.social-icon svg {
+  width: 25px;
+  height: 25px;
+
+  fill: currentColor;
+}
+
+.social-icon.instagram svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.social-icon:hover {
+  transform: translateY(-4px);
+
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.social-icon:active {
+  transform: translateY(-1px);
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 600px) {
+
+  .contacts-card {
+    padding: 25px 15px;
+  }
+
+  .contact-info {
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+
+  .contact-item {
+    gap: 5px;
+  }
+
+  .social-links {
+    gap: 12px;
+  }
+
+  .social-icon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .social-icon svg {
+    width: 23px;
+    height: 23px;
+  }
+
+}
+
+
+/* =========================================================
+   BAGIRA — ФИНАЛЬНОЕ ВИЗУАЛЬНОЕ ОБНОВЛЕНИЕ
+   ========================================================= */
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 85px;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* ---------- HEADER ---------- */
+
+.header {
+  box-shadow: 0 4px 22px rgba(43, 36, 37, .06);
+  transition: background .25s ease, box-shadow .25s ease;
+}
+
+.header-inner {
+  min-height: 78px;
+}
+
+.logo img {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+  transition: transform .25s ease;
+}
+
+.logo:hover img {
+  transform: scale(1.04);
+}
+
+.nav {
+  gap: 22px;
+}
+
+.nav a {
+  position: relative;
+  padding: 8px 2px;
+  font-weight: 500;
+}
+
+.nav a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .25s ease;
+}
+
+.nav a:hover {
+  opacity: 1;
+  color: var(--accent-dark);
+}
+
+.nav a:hover::after {
+  transform: scaleX(1);
+}
+
+.phone {
+  color: var(--text);
+  transition: color .2s ease, transform .2s ease;
+}
+
+.phone:hover {
+  color: var(--accent-dark);
+  transform: translateY(-1px);
+}
+
+.header-booking,
+.main-button,
+.submit-button,
+.service-button {
+  background: var(--accent-dark);
+  box-shadow: 0 8px 22px rgba(129, 86, 93, .18);
+}
+
+.header-booking:hover,
+.main-button:hover,
+.submit-button:hover,
+.service-button:hover {
+  background: var(--accent);
+  box-shadow: 0 12px 28px rgba(129, 86, 93, .25);
+}
+
+/* ---------- HERO ---------- */
+
+.hero {
+  min-height: 680px;
+  position: relative;
+  isolation: isolate;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at 75% 45%, rgba(255, 255, 255, .10), transparent 30%);
+  pointer-events: none;
+}
+
+.hero-content {
+  padding: 125px 0;
+}
+
+.hero-subtitle {
+  display: inline-block;
+  margin-bottom: 20px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  backdrop-filter: blur(6px);
+}
+
+.hero h1 {
+  margin-bottom: 22px;
+  font-size: clamp(48px, 6.5vw, 82px);
+  text-shadow: 0 5px 24px rgba(0, 0, 0, .18);
+}
+
+.hero-text {
+  max-width: 590px;
+  line-height: 1.7;
+}
+
+.main-button {
+  padding: 15px 32px;
+  font-size: 16px;
+  transition: transform .25s ease, box-shadow .25s ease, background .25s ease;
+}
+
+.main-button:hover {
+  transform: translateY(-3px);
+}
+
+/* ---------- SECTION TITLES ---------- */
+
+.section-title {
+  position: relative;
+  margin-bottom: 50px;
+}
+
+.section-title p,
+.section-label {
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.section-title h2 {
+  margin-top: 4px;
+  font-size: clamp(34px, 4vw, 46px);
+  letter-spacing: -.5px;
+}
+
+.section-title::after {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 2px;
+  margin: 17px auto 0;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* ---------- ADVANTAGES ---------- */
+
+.advantages {
+  padding: 105px 0;
+}
+
+.advantages-grid {
+  gap: 22px;
+}
+
+.advantage {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .16);
+}
+
+.advantage-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.advantage h3 {
+  font-size: 25px;
+}
+
+/* ---------- SERVICES ---------- */
+
+.services {
+  padding: 110px 0;
+  background-attachment: fixed;
+}
+
+.services-grid {
+  gap: 24px;
+}
+
+.service-card {
+  min-height: 300px;
+  padding: 38px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 26px;
+  overflow: hidden;
+  position: relative;
+  transition: transform .3s ease, box-shadow .3s ease;
+}
+
+.service-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 35%, rgba(255, 255, 255, .12));
+  pointer-events: none;
+}
+
+.service-card>* {
+  position: relative;
+  z-index: 1;
+}
+
+.service-card:hover {
+  transform: translateY(-8px);
+}
+
+.service-icon {
+  font-size: 48px;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, .08));
+}
+
+.service-card h3 {
+  margin-bottom: 8px;
+  font-size: 32px;
+}
+
+.service-card p {
+  max-width: 260px;
+  line-height: 1.6;
+}
+
+/* ---------- ABOUT ---------- */
+
+.about {
+  padding: 110px 0;
+}
+
+.about-content {
+  gap: 85px;
+}
+
+.about-content p {
+  line-height: 1.8;
+}
+
+.about h2 {
+  font-size: clamp(38px, 5vw, 56px);
+}
+
+/* ---------- GALLERY ---------- */
+
+.gallery {
+  padding: 110px 0;
+  background: var(--surface);
+}
+
+.gallery-carousels {
+  display: grid;
+  gap: 42px;
+}
+
+.gallery-carousel {
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.gallery-track {
+  gap: 16px;
+}
+
+.gallery-item {
+  border-radius: 18px;
+  box-shadow: 0 8px 25px rgba(43, 36, 37, .08);
+}
+
+.gallery-item img {
+  height: 290px;
+  transition: transform .5s ease, filter .35s ease;
+}
+
+.gallery-item:hover img {
+  transform: scale(1.07);
+  filter: brightness(1.03);
+}
+
+.gallery-prev,
+.gallery-next {
+  width: 48px;
+  height: 48px;
+  background: rgba(43, 36, 37, .72);
+  backdrop-filter: blur(5px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .16);
+}
+
+/* ---------- REVIEWS ---------- */
+
+.reviews {
+  padding: 110px 0;
+}
+
+.reviews-grid {
+  gap: 24px;
+}
+
+.review {
+  min-height: 210px;
+  padding: 34px 30px;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.review p {
+  line-height: 1.7;
+}
+
+.review strong {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 23px;
+}
+
+/* ---------- PROMOTION ---------- */
+
+.promotion {
+  position: relative;
+  padding: 90px 0;
+  overflow: hidden;
+}
+
+.promotion::before {
+  content: "✦";
+  position: absolute;
+  right: 7%;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 180px;
+  color: rgba(255, 255, 255, .08);
+  pointer-events: none;
+}
+
+.promotion-content {
+  position: relative;
+  z-index: 1;
+}
+
+.promotion h2 {
+  font-size: clamp(34px, 4vw, 48px);
+}
+
+/* ---------- BOOKING ---------- */
+
+.booking {
+  padding: 110px 0;
+}
+
+.booking-form {
+  padding: 42px;
+  border-radius: 26px;
+  box-shadow: 0 18px 55px rgba(72, 42, 46, .10);
+}
+
+.form-group label {
+  color: var(--text);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  border-radius: 13px;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.form-group input:hover,
+.form-group select:hover,
+.form-group textarea:hover {
+  background: #fff;
+}
+
+.time-button {
+  border-radius: 12px;
+  transition: transform .2s ease, background .2s ease, border-color .2s ease;
+}
+
+.time-button:not(:disabled):hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.time-button.selected {
+  box-shadow: 0 6px 16px rgba(129, 86, 93, .18);
+}
+
+/* ---------- CONTACTS ---------- */
+
+.contacts {
+  padding: 105px 0;
+}
+
+.contacts-card {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 35px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  box-shadow: 0 18px 50px rgba(72, 42, 46, .07);
+}
+
+.contacts-card h3 {
+  margin-bottom: 32px;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 44px;
+}
+
+.contact-info {
+  gap: 80px;
+}
+
+.contact-item a,
+.contact-item>span:last-child {
+  font-size: 19px;
+}
+
+.social-links {
+  margin-top: 28px;
+  gap: 16px;
+}
+
+.social-icon {
+  width: 52px;
+  height: 52px;
+  background: var(--dark);
+  box-shadow: 0 7px 18px rgba(43, 36, 37, .12);
+}
+
+.social-icon:hover {
+  background: var(--accent-dark);
+}
+
+/* ---------- FOOTER ---------- */
+
+.footer {
+  padding: 28px 0;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+.footer p {
+  opacity: .82;
+}
+
+/* ---------- MOBILE STICKY BOOKING ---------- */
+
+.mobile-booking {
+  display: none;
+}
+
+/* ---------- ACCESSIBILITY / FOCUS ---------- */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(168, 117, 123, .35);
+  outline-offset: 3px;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 800px) {
+  .header-inner {
+    min-height: 64px;
+  }
+
+  /* Бургер существует только на мобильной версии */
+  .burger {
+    display: flex;
+  }
+
+  .nav {
+    top: 64px;
+    border-top: 1px solid var(--line);
+    border-radius: 0 0 18px 18px;
+    padding: 22px 20px 26px;
+    background: rgba(255, 250, 249, .98);
+    backdrop-filter: blur(14px);
+  }
+
+  .nav a {
+    width: 100%;
+    padding: 9px;
+  }
+
+  .nav a::after {
+    display: none;
+  }
+
+  .hero {
+    min-height: 610px;
+    background-attachment: scroll;
+  }
+
+  .logo_hero {
+    width: 155px;
+    opacity: .88;
+  }
+
+  .span_hero {
+    top: 12px;
+    left: 15px;
+    font-size: 48px;
+  }
+
+  .hero-content {
+    padding: 100px 0 80px;
+  }
+
+  .hero h1 {
+    font-size: clamp(42px, 12vw, 58px);
+  }
+
+  .hero-subtitle {
+    font-size: 12px;
+    letter-spacing: 1.5px;
+  }
+
+  .hero-text {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  .advantages,
+  .services,
+  .about,
+  .gallery,
+  .reviews,
+  .booking,
+  .contacts {
+    padding: 78px 0;
+  }
+
+  .section-title {
+    margin-bottom: 34px;
+  }
+
+  .section-title h2 {
+    font-size: 34px;
+  }
+
+  .advantage,
+  .service-card,
+  .review {
+    border-radius: 20px;
+  }
+
+  .gallery-item img {
+    height: 230px;
+  }
+
+  .gallery-prev,
+  .gallery-next {
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+
+  .booking-form {
+    padding: 28px 20px;
+  }
+
+  .contacts-card {
+    padding: 34px 20px;
+    border-radius: 22px;
+  }
+
+  .contacts-card h3 {
+    font-size: 38px;
+  }
+
+  .contact-info {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 420px) {
+  .header-booking {
+    min-height: 36px;
+    padding: 0 11px;
+    font-size: 11.5px;
+  }
+
+  .phone,
+  .burger {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .logo img {
+    width: 46px;
+    height: 46px;
+  }
+
+  .hero-content {
+    padding-top: 85px;
+  }
+
+  .gallery-item img {
+    height: 200px;
+  }
+}
+
+/* Бургер по умолчанию НИКОГДА не показываем на десктопе */
+@media (min-width: 801px) {
+  .burger {
+    display: none !important;
+  }
+}
+
+
+/* ================= MOBILE HEADER FINAL POLISH ================= */
+@media (max-width: 800px) {
+  .header {
+    background: rgba(255, 255, 255, .94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 4px 18px rgba(43, 36, 37, .06);
+  }
+
+  .header-inner {
+    width: min(100% - 24px, 600px);
+  }
+
+  .nav {
+    top: 62px;
+  }
+
+  .mobile-booking {
+    display: none !important;
+  }
+}
+
+@media (min-width: 801px) {
+  .mobile-booking {
+    display: none !important;
+  }
 }
