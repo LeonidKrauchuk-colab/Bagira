@@ -802,6 +802,25 @@
        ОБНОВИТЬ
   ========================== -->
 
+      <details style="background:#fff;padding:14px 18px;border-radius:12px;margin:0 0 14px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <summary style="font-size:18px;font-weight:700;cursor:pointer">⚙️ График работы и длительность процедур</summary>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px">
+          <label>Начало рабочего дня<input type="time" id="scheduleStart" style="display:block;width:100%;padding:10px;margin-top:5px"></label>
+          <label>Окончание рабочего дня<input type="time" id="scheduleEnd" style="display:block;width:100%;padding:10px;margin-top:5px"></label>
+          <label>Шаг записи<select id="scheduleInterval" style="display:block;width:100%;padding:10px;margin-top:5px"><option value="15">15 минут</option><option value="30">30 минут</option><option value="45">45 минут</option><option value="60">60 минут</option></select></label>
+        </div>
+        <h3 style="margin:16px 0 8px">Длительность процедур</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+          <label>Маникюр, минут<input type="number" min="15" max="360" step="15" id="durationManicure" style="display:block;width:100%;padding:10px;margin-top:5px"></label>
+          <label>Педикюр, минут<input type="number" min="15" max="360" step="15" id="durationPedicure" style="display:block;width:100%;padding:10px;margin-top:5px"></label>
+          <label>Депиляция, минут<input type="number" min="15" max="360" step="15" id="durationDepilation" style="display:block;width:100%;padding:10px;margin-top:5px"></label>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px">
+          <button type="button" id="saveScheduleButton" class="refresh-button">Сохранить график</button>
+          <span id="scheduleMessage" role="status" aria-live="polite"></span>
+        </div>
+      </details>
+
       <section style="background:#fff;padding:18px;border-radius:12px;margin:0 0 20px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
         <h2 style="margin:0 0 12px">Выходные дни</h2>
         <p style="margin:0 0 12px;color:#666">На выбранные даты клиенты не смогут записаться.</p>
@@ -849,7 +868,7 @@
           </span>
 
           <span class="summary-title">
-            Свободных мест
+            Свободных интервалов
           </span>
         </div>
 
@@ -860,7 +879,7 @@
           </span>
 
           <span class="summary-title">
-            Всего мест
+            Интервалов в графике
           </span>
         </div>
 
@@ -1141,19 +1160,87 @@
        РАБОЧЕЕ ВРЕМЯ
     ===================================================== */
 
-    const WORK_TIMES = [
+    let scheduleConfig = {
+      startTime: "10:00",
+      endTime: "19:00",
+      intervalMinutes: 60,
+      serviceDurations: { "Маникюр": 60, "Педикюр": 60, "Депиляция": 60 }
+    };
 
-      "10:00",
-      "11:00",
-      "12:00",
-      "13:00",
-      "14:00",
-      "15:00",
-      "16:00",
-      "17:00",
-      "18:00"
+    function adminMinutes(value) {
+      const parts = String(value || "").split(":");
+      return Number(parts[0]) * 60 + Number(parts[1]);
+    }
 
-    ];
+    function adminTime(value) {
+      return String(Math.floor(value / 60)).padStart(2, "0") + ":" + String(value % 60).padStart(2, "0");
+    }
+
+    function adminDuration(service) {
+      return Number(scheduleConfig.serviceDurations[service]) || scheduleConfig.intervalMinutes;
+    }
+
+    function getAdminTimes(service) {
+      const start = adminMinutes(scheduleConfig.startTime);
+      const end = adminMinutes(scheduleConfig.endTime);
+      const duration = service ? adminDuration(service) : Math.min(...Object.values(scheduleConfig.serviceDurations));
+      const slots = [];
+      for (let time = start; time + duration <= end; time += Number(scheduleConfig.intervalMinutes)) slots.push(adminTime(time));
+      return slots;
+    }
+
+    function applyScheduleConfig(config) {
+      if (!config) return;
+      scheduleConfig = config;
+      WORK_TIMES = getAdminTimes("");
+      document.getElementById("scheduleStart").value = config.startTime;
+      document.getElementById("scheduleEnd").value = config.endTime;
+      document.getElementById("scheduleInterval").value = String(config.intervalMinutes);
+      const durations = config.serviceDurations || {};
+      document.getElementById("durationManicure").value = durations["Маникюр"] || 60;
+      document.getElementById("durationPedicure").value = durations["Педикюр"] || 60;
+      document.getElementById("durationDepilation").value = durations["Депиляция"] || 60;
+    }
+
+    let WORK_TIMES = getAdminTimes("");
+
+    async function saveScheduleConfigFromForm() {
+      const button = document.getElementById("saveScheduleButton");
+      const message = document.getElementById("scheduleMessage");
+      const schedule = {
+        startTime: document.getElementById("scheduleStart").value,
+        endTime: document.getElementById("scheduleEnd").value,
+        intervalMinutes: Number(document.getElementById("scheduleInterval").value),
+        serviceDurations: {
+          "Маникюр": Number(document.getElementById("durationManicure").value),
+          "Педикюр": Number(document.getElementById("durationPedicure").value),
+          "Депиляция": Number(document.getElementById("durationDepilation").value)
+        }
+      };
+      message.style.color = "#b42318";
+      message.textContent = "";
+      button.disabled = true;
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "setSchedule", schedule, idToken: GOOGLE_ID_TOKEN })
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || "Не удалось сохранить график");
+        applyScheduleConfig(result.schedule);
+        message.style.color = "#237a37";
+        message.textContent = "График сохранён";
+        await loadBookings();
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    document.getElementById("saveScheduleButton").addEventListener("click", saveScheduleConfigFromForm);
+
 
 
     /* =====================================================
@@ -1549,6 +1636,7 @@
         }
 
         const bookings = result.bookings;
+        if (result.schedule) applyScheduleConfig(result.schedule);
 
         const date = selectedDate.value;
 
@@ -1574,20 +1662,18 @@
         });
 
         /* Занятое время */
-        const busyTimes = new Set();
-
+        const occupiedGridTimes = new Set();
         activeBookings.forEach(booking => {
-
-          const time = String(
-            booking.time || ""
-          )
-            .trim()
-            .substring(0, 5);
-
-          if (time) {
-            busyTimes.add(time);
+          const start = adminMinutes(String(booking.time || "").trim().substring(0, 5));
+          const end = start + adminDuration(booking.service);
+          if (start >= 0) {
+            WORK_TIMES.forEach(time => {
+              const gridStart = adminMinutes(time);
+              if (gridStart < end && start < gridStart + Math.min(...Object.values(scheduleConfig.serviceDurations))) {
+                occupiedGridTimes.add(time);
+              }
+            });
           }
-
         });
 
         bookingsContainer.innerHTML = "";
@@ -1615,17 +1701,9 @@
           });
 
           if (booking) {
-
-            bookingList.appendChild(
-              createActiveCard(booking)
-            );
-
-          } else {
-
-            bookingList.appendChild(
-              createFreeCard(time)
-            );
-
+            bookingList.appendChild(createActiveCard(booking));
+          } else if (!occupiedGridTimes.has(time)) {
+            bookingList.appendChild(createFreeCard(time));
           }
 
         });
@@ -1639,9 +1717,7 @@
         activeCount.textContent = activeBookings.length;
 
         freeCount.textContent =
-          WORK_TIMES.filter(
-            time => !busyTimes.has(time)
-          ).length;
+          WORK_TIMES.filter(time => !occupiedGridTimes.has(time)).length;
         totalCount.textContent =
           WORK_TIMES.length;
 
@@ -1693,10 +1769,12 @@
         .trim()
         .substring(0, 5);
 
+      const endTime = adminTime(adminMinutes(time) + adminDuration(booking.service));
+
       card.innerHTML = `
 
       <div class="booking-time">
-        🟢 ${time}
+        🟢 ${time}–${endTime}
       </div>
 
       <div class="booking-info">
@@ -1854,6 +1932,28 @@
        ОТКРЫТЬ ФОРМУ НОВОЙ ЗАПИСИ
     ===================================================== */
 
+    function populateAdminBookingTimes(selectedTime, service) {
+      bookingTime.innerHTML = `<option value="">Выберите время</option>`;
+      const slots = getAdminTimes(service || "");
+      slots.forEach(time => {
+        const option = document.createElement("option");
+        option.value = time;
+        option.textContent = time;
+        bookingTime.appendChild(option);
+      });
+      if (selectedTime && !slots.includes(selectedTime) && editingBookingId) {
+        const option = document.createElement("option");
+        option.value = selectedTime;
+        option.textContent = selectedTime + " (текущая запись)";
+        bookingTime.appendChild(option);
+      }
+      bookingTime.value = selectedTime && slots.includes(selectedTime) ? selectedTime : (editingBookingId ? selectedTime : "");
+    }
+
+    bookingService.addEventListener("change", () => {
+      populateAdminBookingTimes(bookingTime.value, bookingService.value);
+    });
+
     function openBookingModal(
       date,
       time
@@ -1868,41 +1968,8 @@
         date;
 
 
-      bookingTime.innerHTML =
-        `
-        <option value="">
-          Выберите время
-        </option>
-      `;
-
-
-      WORK_TIMES.forEach(
-        workTime => {
-
-          const option =
-            document.createElement(
-              "option"
-            );
-
-
-          option.value =
-            workTime;
-
-
-          option.textContent =
-            workTime;
-
-
-          bookingTime.appendChild(
-            option
-          );
-
-        }
-      );
-
-
-      bookingTime.value =
-        time;
+      bookingService.value = "";
+      populateAdminBookingTimes(time, "");
 
 
       bookingName.value =
@@ -1956,31 +2023,13 @@
 
       bookingDate.value = booking.date || "";
 
-      bookingTime.innerHTML = `
-        <option value="">
-          Выберите время
-        </option>
-      `;
+      populateAdminBookingTimes(String(booking.time || "").trim().substring(0, 5), booking.service || "");
 
-      WORK_TIMES.forEach(workTime => {
-
-        const option = document.createElement("option");
-
-        option.value = workTime;
-        option.textContent = workTime;
-
-        bookingTime.appendChild(option);
-
-      });
-
-      bookingTime.value = String(booking.time || "")
-        .trim()
-        .substring(0, 5);
+      bookingService.value = booking.service || "";
 
       bookingName.value = booking.name || "";
       bookingPhone.value = booking.phone || "";
       bookingTelegram.value = booking.telegram || "";
-      bookingService.value = booking.service || "";
       bookingComment.value = booking.comment || "";
 
       modalError.textContent = "";

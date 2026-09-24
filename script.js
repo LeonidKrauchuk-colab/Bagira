@@ -51,8 +51,16 @@ const bookingDetails =
 const newBookingButton =
   document.getElementById("newBooking");
 
-const timeButtons =
-  document.querySelectorAll(".time-button");
+const timeList = document.getElementById("timeList");
+const workingHoursText = document.getElementById("workingHoursText");
+const timeSlotHint = document.getElementById("timeSlotHint");
+let timeButtons = [];
+let scheduleConfig = {
+  startTime: "10:00",
+  endTime: "19:00",
+  intervalMinutes: 60,
+  serviceDurations: { "Маникюр": 60, "Педикюр": 60, "Депиляция": 60 }
+};
 
 let closedDayDates = [];
 const CLOSED_DAY_WARNING = "Мы не работаем в выбранный день. Пожалуйста, выберите другую дату.";
@@ -397,60 +405,88 @@ function formatDateForDisplay(
 }
 
 
-// ==========================================================
-// ВЫБОР ВРЕМЕНИ
-// ==========================================================
+function minutesFromTime(value) {
+  const parts = String(value || "").split(":");
+  return Number(parts[0]) * 60 + Number(parts[1]);
+}
 
-timeButtons.forEach(
-  function (button) {
+function timeFromMinutes(value) {
+  return String(Math.floor(value / 60)).padStart(2, "0") + ":" + String(value % 60).padStart(2, "0");
+}
 
-    button.addEventListener(
-      "click",
-      function () {
+function getServiceDuration(service) {
+  return Number(scheduleConfig.serviceDurations && scheduleConfig.serviceDurations[service]) || Number(scheduleConfig.intervalMinutes) || 60;
+}
 
-        if (
-          button.disabled
-        ) {
+function generateBookingSlots(service) {
+  if (!service) return [];
+  const open = minutesFromTime(scheduleConfig.startTime);
+  const close = minutesFromTime(scheduleConfig.endTime);
+  const step = Number(scheduleConfig.intervalMinutes) || 60;
+  const duration = getServiceDuration(service);
+  const slots = [];
+  for (let start = open; start + duration <= close; start += step) slots.push(timeFromMinutes(start));
+  return slots;
+}
 
-          return;
-
-        }
-
-
-        timeButtons.forEach(
-          function (item) {
-
-            item.classList.remove(
-              "selected"
-            );
-
-          }
-        );
-
-
-        button.classList.add(
-          "selected"
-        );
-
-
-        if (
-          selectedTimeInput
-        ) {
-
-          selectedTimeInput.value =
-            button.dataset.time;
-
-        }
-
-
-        hideError();
-
-      }
-    );
-
+function renderBookingSlots(bookings, selectedDate, serverToday, serverTime, dayIsClosed) {
+  if (!timeList) return;
+  const selectedTime = selectedTimeInput ? selectedTimeInput.value : "";
+  const service = serviceInput ? serviceInput.value : "";
+  const slots = generateBookingSlots(service);
+  timeList.replaceChildren();
+  timeButtons = [];
+  if (workingHoursText) workingHoursText.textContent = scheduleConfig.startTime + " — " + scheduleConfig.endTime;
+  if (!service) {
+    const hint = document.createElement("span");
+    hint.className = "time-hint";
+    hint.textContent = "Сначала выберите услугу";
+    timeList.appendChild(hint);
+    if (timeSlotHint) timeSlotHint.textContent = "";
+    return;
   }
-);
+  if (timeSlotHint) timeSlotHint.textContent = "Длительность: " + getServiceDuration(service) + " мин. Шаг: " + scheduleConfig.intervalMinutes + " мин.";
+  if (!slots.length) {
+    const hint = document.createElement("span");
+    hint.className = "time-hint";
+    hint.textContent = "Для этой процедуры нет слотов в выбранном графике";
+    timeList.appendChild(hint);
+    return;
+  }
 
+  const requestedDuration = getServiceDuration(service);
+  slots.forEach(function(time) {
+    const start = minutesFromTime(time);
+    const end = start + requestedDuration;
+    const past = selectedDate === serverToday && time <= serverTime;
+    const overlaps = bookings.some(function(booking) {
+      if (booking.date !== selectedDate || booking.status === "Отменена") return false;
+      const bookedStart = minutesFromTime(booking.time);
+      const bookedDuration = getServiceDuration(booking.service);
+      return start < bookedStart + bookedDuration && bookedStart < end;
+    });
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "time-button";
+    button.dataset.time = time;
+    button.textContent = time;
+    button.disabled = dayIsClosed || past || overlaps;
+    if (button.disabled) button.classList.add("busy");
+    if (!button.disabled && selectedTime === time) button.classList.add("selected");
+    button.addEventListener("click", function() {
+      if (button.disabled) return;
+      timeButtons.forEach(item => item.classList.remove("selected"));
+      button.classList.add("selected");
+      if (selectedTimeInput) selectedTimeInput.value = time;
+      hideError();
+    });
+    timeButtons.push(button);
+    timeList.appendChild(button);
+  });
+
+  if (selectedTime && !slots.includes(selectedTime)) selectedTimeInput.value = "";
+  else if (selectedTime && timeButtons.find(button => button.dataset.time === selectedTime)?.disabled) selectedTimeInput.value = "";
+}
 
 // ==========================================================
 // ЗАГРУЗКА ЗАНЯТЫХ ВРЕМЁН
@@ -517,80 +553,10 @@ async function loadBusyTimes() {
     }
 
 
-    timeButtons.forEach(
-      function (button) {
+    scheduleConfig = result.schedule || scheduleConfig;
+    renderBookingSlots(bookings, selectedDate, serverToday, serverTime, selectedDayIsClosed);
 
-        const time =
-          button.dataset.time;
-
-
-        const isPast = selectedDate === serverToday && time <= serverTime;
-        const isBusy =
-          selectedDayIsClosed || isPast || bookings.some(
-            function (booking) {
-
-              return (
-
-                booking.date ===
-                selectedDate &&
-
-                booking.time ===
-                time &&
-
-                booking.status !==
-                "Отменена"
-
-              );
-
-            }
-          );
-
-
-        button.disabled =
-          isBusy;
-
-
-        if (isBusy) {
-
-          button.classList.add(
-            "busy"
-          );
-
-        }
-
-        else {
-
-          button.classList.remove(
-            "busy"
-          );
-
-        }
-
-
-        // Если выбранное время стало занятым
-
-        if (
-          isBusy &&
-          selectedTimeInput &&
-          selectedTimeInput.value ===
-          time
-        ) {
-
-          selectedTimeInput.value =
-            "";
-
-          button.classList.remove(
-            "selected"
-          );
-
-        }
-
-      }
-    );
-
-  }
-
-  catch (error) {
+  } catch (error) {
 
     console.error(
       "Ошибка загрузки записей:",
@@ -601,6 +567,13 @@ async function loadBusyTimes() {
 
 }
 
+
+if (serviceInput) {
+  serviceInput.addEventListener("change", function() {
+    if (selectedTimeInput) selectedTimeInput.value = "";
+    loadBusyTimes();
+  });
+}
 
 // ==========================================================
 // ИЗМЕНЕНИЕ ДАТЫ

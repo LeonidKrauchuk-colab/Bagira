@@ -72,6 +72,7 @@ function doGet(e) {
       success: true,
       bookings: bookings,
       closedDays: closedDays,
+      schedule: getScheduleConfig(),
       today: Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
       currentTime: Utilities.formatDate(now, timezone, "HH:mm")
     });
@@ -133,6 +134,16 @@ if (
   });
 
 }
+
+    // --------------------------------------------------------
+    // НАСТРОЙКА ГРАФИКА
+    // --------------------------------------------------------
+    if (data.action === "setSchedule") {
+      if (!checkGoogleAdminAccess(data.idToken)) {
+        return jsonResponse({ success: false, error: "Доступ запрещён" });
+      }
+      return jsonResponse(setScheduleConfig(data.schedule));
+    }
 
     // --------------------------------------------------------
     // ВЫХОДНЫЕ ДНИ
@@ -233,7 +244,8 @@ if (
 
   return jsonResponse({
     success: true,
-    bookings: bookings
+    bookings: bookings,
+    schedule: getScheduleConfig()
   });
 
 }
@@ -488,48 +500,27 @@ function createBooking(data) {
       return { success: false, error: "Это время уже прошло. Выберите свободное время позже." };
     }
 
+    if (!isStartAllowedInSchedule(data.date, data.time, data.service, getScheduleConfig())) {
+      return { success: false, error: "Выбранное время не входит в актуальный график работы." };
+    }
+
     // --------------------------------------------------------
     // Проверяем занятость
     // --------------------------------------------------------
 
-    const alreadyBooked =
-      bookings.some(
-        function(booking) {
-
-          return (
-
-            booking.date ===
-              String(data.date)
-
-            &&
-
-            booking.time ===
-              String(data.time)
-
-            &&
-
-            booking.status !==
-              "Отменена"
-
-          );
-
-        }
-      );
-
+    const alreadyBooked = isTimeBusy(
+      data.date,
+      data.time,
+      null,
+      data.service
+    );
 
     if (alreadyBooked) {
-
       return {
-
         success: false,
-
-        error:
-          "Это время уже занято"
-
+        error: "Это время пересекается с другой записью"
       };
-
     }
-
 
     // --------------------------------------------------------
     // ID
@@ -728,12 +719,16 @@ function addAdminBooking(data) {
     if (isClosedDay(data.date)) {
       return { success: false, error: "Выбранный день отмечен как выходной" };
     }
+    if (!isStartAllowedInSchedule(data.date, data.time, data.service, getScheduleConfig())) {
+      return { success: false, error: "Выбранное время не входит в актуальный график работы." };
+    }
 
     if (
       isTimeBusy(
         data.date,
         data.time,
-        null
+        null,
+        data.service
       )
     ) {
 
@@ -944,11 +939,17 @@ function updateAdminBookingInternal(data) {
     return { success: false, error: "Выбранный день отмечен как выходной" };
   }
 
+  const newService = data.service !== undefined ? data.service : booking.service;
+  if (!isStartAllowedInSchedule(newDate, newTime, newService, getScheduleConfig())) {
+    return { success: false, error: "Выбранное время не входит в актуальный график работы." };
+  }
+
   if (
     isTimeBusy(
       newDate,
       newTime,
-      data.id
+      data.id,
+      newService
     )
   ) {
 
@@ -1342,73 +1343,25 @@ function findBookingById(id) {
 // excludeId нужен при редактировании собственной записи.
 // ============================================================
 
-function isTimeBusy(
-  date,
-  time,
-  excludeId
-) {
+function isTimeBusy(date, time, excludeId, service) {
+  const targetDate = normalizeDate(date);
+  const config = getScheduleConfig();
+  const requestedStart = timeToMinutes(normalizeTime(time));
+  if (requestedStart < 0) return true;
+  const requestedEnd = requestedStart + getServiceDuration(service, config);
+  const bookings = getBookings(getSheet());
 
-  const sheet =
-    getSheet();
+  return bookings.some(function(booking) {
+    if (booking.status === "Отменена") return false;
+    if (excludeId && String(booking.id) === String(excludeId)) return false;
+    if (booking.date !== targetDate) return false;
 
-
-  const bookings =
-    getBookings(sheet);
-
-
-  const targetDate =
-    normalizeDate(date);
-
-
-  const targetTime =
-    normalizeTime(time);
-
-
-  return bookings.some(
-    function(booking) {
-
-      // Отменённые записи свободны
-      if (
-        booking.status ===
-        "Отменена"
-      ) {
-
-        return false;
-
-      }
-
-
-      // При редактировании
-      // собственную запись исключаем
-      if (
-        excludeId &&
-        String(booking.id) ===
-        String(excludeId)
-      ) {
-
-        return false;
-
-      }
-
-
-      return (
-
-        booking.date ===
-        targetDate
-
-        &&
-
-        booking.time ===
-        targetTime
-
-      );
-
-    }
-  );
-
+    const bookedStart = timeToMinutes(normalizeTime(booking.time));
+    if (bookedStart < 0) return false;
+    const bookedEnd = bookedStart + getServiceDuration(booking.service, config);
+    return requestedStart < bookedEnd && bookedStart < requestedEnd;
+  });
 }
-
-
 
 // ============================================================
 // ПРОВЕРКА ADMIN API TOKEN
@@ -2211,6 +2164,133 @@ function pad2(number) {
     "0"
   );
 
+}
+
+// ============================================================
+// НАСТРОЙКИ ГРАФИКА И ДЛИТЕЛЬНОСТИ ПРОЦЕДУР
+// ============================================================
+
+function getDefaultScheduleConfig() {
+  return {
+    startTime: "10:00",
+    endTime: "19:00",
+    intervalMinutes: 60,
+    serviceDurations: {
+      "Маникюр": 60,
+      "Педикюр": 60,
+      "Депиляция": 60
+    }
+  };
+}
+
+function getScheduleConfig() {
+  const raw = PropertiesService.getScriptProperties().getProperty("SCHEDULE_CONFIG");
+  const defaults = getDefaultScheduleConfig();
+  if (!raw) return defaults;
+  try {
+    const saved = JSON.parse(raw);
+    return {
+      startTime: isValidTimeString(saved.startTime) ? saved.startTime : defaults.startTime,
+      endTime: isValidTimeString(saved.endTime) ? saved.endTime : defaults.endTime,
+      intervalMinutes: [15, 30, 45, 60].indexOf(Number(saved.intervalMinutes)) !== -1 ? Number(saved.intervalMinutes) : defaults.intervalMinutes,
+      serviceDurations: Object.assign({}, defaults.serviceDurations, saved.serviceDurations || {})
+    };
+  } catch (error) {
+    return defaults;
+  }
+}
+
+function setScheduleConfig(schedule) {
+  if (!schedule || !isValidTimeString(schedule.startTime) || !isValidTimeString(schedule.endTime)) {
+    return { success: false, error: "Укажите корректное время начала и окончания рабочего дня." };
+  }
+  const start = timeToMinutes(schedule.startTime);
+  const end = timeToMinutes(schedule.endTime);
+  const interval = Number(schedule.intervalMinutes);
+  if (end <= start) return { success: false, error: "Время окончания должно быть позже времени начала." };
+  if ([15, 30, 45, 60].indexOf(interval) === -1) return { success: false, error: "Выберите шаг записи 15, 30, 45 или 60 минут." };
+
+  const defaults = getDefaultScheduleConfig();
+  const durations = {};
+  Object.keys(defaults.serviceDurations).forEach(function(service) {
+    const duration = Number(schedule.serviceDurations && schedule.serviceDurations[service]);
+    if (!Number.isInteger(duration) || duration < 15 || duration > 360 || duration % 15 !== 0) {
+      throw new Error("Длительность «" + service + "» должна быть от 15 до 360 минут, кратной 15.");
+    }
+    durations[service] = duration;
+  });
+  const normalized = {
+    startTime: schedule.startTime,
+    endTime: schedule.endTime,
+    intervalMinutes: interval,
+    serviceDurations: durations
+  };
+  Object.keys(durations).forEach(function(service) {
+    if (durations[service] > end - start) {
+      throw new Error("Рабочий день короче длительности процедуры «" + service + "».");
+    }
+  });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const timezone = Session.getScriptTimeZone();
+    const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
+    const futureBookings = getBookings(getSheet()).filter(function(booking) {
+      return booking.status !== "Отменена" && booking.date >= today;
+    });
+    const invalidBookings = futureBookings.filter(function(booking) {
+      return !isStartAllowedInSchedule(booking.date, booking.time, booking.service, normalized);
+    });
+    for (let i = 0; i < futureBookings.length; i++) {
+      for (let j = i + 1; j < futureBookings.length; j++) {
+        const first = futureBookings[i];
+        const second = futureBookings[j];
+        if (first.date !== second.date) continue;
+        const firstStart = timeToMinutes(normalizeTime(first.time));
+        const secondStart = timeToMinutes(normalizeTime(second.time));
+        const firstEnd = firstStart + getServiceDuration(first.service, normalized);
+        const secondEnd = secondStart + getServiceDuration(second.service, normalized);
+        if (firstStart < secondEnd && secondStart < firstEnd) {
+          if (invalidBookings.indexOf(first) === -1) invalidBookings.push(first);
+          if (invalidBookings.indexOf(second) === -1) invalidBookings.push(second);
+        }
+      }
+    }
+    if (invalidBookings.length) {
+      const details = invalidBookings.map(function(booking) {
+        return booking.date.split("-").reverse().join(".") + " в " + booking.time + " (" + booking.service + ")";
+      });
+      return { success: false, error: "Изменение графика конфликтует с записями: " + details.join(", ") + ". Перенесите их или скорректируйте длительность." };
+    }
+    PropertiesService.getScriptProperties().setProperty("SCHEDULE_CONFIG", JSON.stringify(normalized));
+    return { success: true, schedule: normalized };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function isValidTimeString(value) {
+  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(String(value || ""));
+}
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : -1;
+}
+
+function isStartAllowedInSchedule(date, time, service, config) {
+  const start = timeToMinutes(normalizeTime(time));
+  const workStart = timeToMinutes(config.startTime);
+  const workEnd = timeToMinutes(config.endTime);
+  if (start < workStart || start < 0) return false;
+  if ((start - workStart) % config.intervalMinutes !== 0) return false;
+  return start + getServiceDuration(service, config) <= workEnd;
+}
+
+function getServiceDuration(service, config) {
+  const minutes = Number(config.serviceDurations && config.serviceDurations[service]);
+  return Number.isInteger(minutes) && minutes > 0 ? minutes : config.intervalMinutes;
 }
 
 // ============================================================
