@@ -65,11 +65,15 @@ function doGet(e) {
 
     const bookings = getBookings(sheet);
     const closedDays = getClosedDays();
+    const timezone = Session.getScriptTimeZone();
+    const now = new Date();
 
     return jsonResponse({
       success: true,
       bookings: bookings,
-      closedDays: closedDays
+      closedDays: closedDays,
+      today: Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
+      currentTime: Utilities.formatDate(now, timezone, "HH:mm")
     });
 
   } catch (error) {
@@ -478,6 +482,10 @@ function createBooking(data) {
 
     if (isClosedDay(data.date)) {
       return { success: false, error: "На выбранную дату запись не принимается. Пожалуйста, выберите другой день." };
+    }
+
+    if (isPastBookingTime(data.date, data.time)) {
+      return { success: false, error: "Это время уже прошло. Выберите свободное время позже." };
     }
 
     // --------------------------------------------------------
@@ -1583,6 +1591,62 @@ function checkGoogleAdminAccess(idToken) {
 
 
 // ============================================================
+// ЕЖЕДНЕВНАЯ СВОДКА ЗАПИСЕЙ
+// ============================================================
+
+function sendDailyBookingsSummary() {
+  const timezone = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
+  const bookings = getBookings(getSheet())
+    .filter(function(booking) {
+      return booking.date === today && booking.status !== "Отменена";
+    })
+    .sort(function(a, b) {
+      return String(a.time || "").localeCompare(String(b.time || ""));
+    });
+
+  // Не отправляем пустую сводку.
+  if (!bookings.length) return;
+
+  const token = PropertiesService.getScriptProperties()
+    .getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
+  const recipientIds = Array.from(new Set([
+    PropertiesService.getScriptProperties().getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY),
+    PropertiesService.getScriptProperties().getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY)
+  ].filter(Boolean)));
+
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN не найден");
+  if (!recipientIds.length) throw new Error("Не заданы получатели сводки Telegram");
+
+  const lines = bookings.map(function(booking) {
+    return escapeTelegram(booking.time || "—") + " — " + escapeTelegram(booking.service || "Процедура не указана");
+  });
+  const message = "☀️ <b>Записи на сегодня: " + bookings.length + "</b>\n\n" + lines.join("\n");
+  const url = "https://api.telegram.org/bot" + token + "/sendMessage";
+
+  recipientIds.forEach(function(chatId) {
+    sendTelegramMessage(url, chatId, message);
+  });
+}
+
+/** Запустить один раз вручную, чтобы создать ежедневный триггер на 8:00. */
+function installDailyBookingsSummaryTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === "sendDailyBookingsSummary") {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger("sendDailyBookingsSummary")
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .nearMinute(0)
+    .inTimezone(Session.getScriptTimeZone())
+    .create();
+}
+
+// ============================================================
 // TELEGRAM
 // Только уведомление о новой записи
 // ============================================================
@@ -2165,6 +2229,15 @@ function getClosedDays() {
 
 function isClosedDay(date) {
   return getClosedDays().indexOf(String(date || "")) !== -1;
+}
+
+function isPastBookingTime(date, time) {
+  const timezone = Session.getScriptTimeZone();
+  const now = new Date();
+  const today = Utilities.formatDate(now, timezone, "yyyy-MM-dd");
+  if (String(date || "") !== today) return false;
+  const currentTime = Utilities.formatDate(now, timezone, "HH:mm");
+  return String(time || "").slice(0, 5) <= currentTime;
 }
 
 function setClosedDays(dates) {

@@ -507,17 +507,14 @@ async function loadBusyTimes() {
     closedDayDates = Array.isArray(result.closedDays) ? result.closedDays : [];
     const selectedDate = dateInput.value;
     const selectedDayIsClosed = closedDayDates.includes(selectedDate);
+    const serverToday = result.today || "";
+    const serverTime = result.currentTime || "";
     if (selectedDayIsClosed) {
       showError(CLOSED_DAY_WARNING);
       if (selectedTimeInput) selectedTimeInput.value = "";
     } else if (formError && formError.textContent === CLOSED_DAY_WARNING) {
       hideError();
     }
-    timeButtons.forEach(function(button) {
-      button.disabled = selectedDayIsClosed;
-      if (selectedDayIsClosed) button.classList.add("busy");
-      else button.classList.remove("busy");
-    });
 
 
     timeButtons.forEach(
@@ -527,8 +524,9 @@ async function loadBusyTimes() {
           button.dataset.time;
 
 
+        const isPast = selectedDate === serverToday && time <= serverTime;
         const isBusy =
-          selectedDayIsClosed || bookings.some(
+          selectedDayIsClosed || isPast || bookings.some(
             function (booking) {
 
               return (
@@ -941,6 +939,12 @@ if (bookingForm) {
         const selectedTime =
           selectedTimeInput.value;
 
+        const currentTime = checkResult.currentTime || "";
+        if (selectedDate === checkResult.today && currentTime && selectedTime <= currentTime) {
+          showError("Это время уже прошло. Выберите свободное время позже.");
+          await loadBusyTimes();
+          return;
+        }
 
         const isBusy =
           bookings.some(
