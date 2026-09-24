@@ -536,14 +536,6 @@ textarea {
 
 /* ================= TIME ================= */
 
-.time-hint {
-  display: block;
-  grid-column: 1 / -1;
-  margin-bottom: 6px;
-  color: #777;
-  font-size: 13px;
-}
-
 .time-list {
   display: grid;
 

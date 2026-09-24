@@ -72,7 +72,6 @@ function doGet(e) {
       success: true,
       bookings: bookings,
       closedDays: closedDays,
-      schedule: getScheduleConfig(),
       today: Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
       currentTime: Utilities.formatDate(now, timezone, "HH:mm")
     });
@@ -136,17 +135,7 @@ if (
 }
 
     // --------------------------------------------------------
-    // НАСТРОЙКА ГРАФИКА
-    // --------------------------------------------------------
-    if (data.action === "setSchedule") {
-      if (!checkGoogleAdminAccess(data.idToken)) {
-        return jsonResponse({ success: false, error: "Доступ запрещён" });
-      }
-      return jsonResponse(setScheduleConfig(data.schedule));
-    }
-
-    // --------------------------------------------------------
-    // ВЫХОДНЫЕ ДНИ
+    // НАСТРОЙКА ВЫХОДНЫХ ДНЕЙ
     // --------------------------------------------------------
     if (data.action === "setClosedDays") {
       if (!checkGoogleAdminAccess(data.idToken)) {
@@ -244,8 +233,7 @@ if (
 
   return jsonResponse({
     success: true,
-    bookings: bookings,
-    schedule: getScheduleConfig()
+    bookings: bookings
   });
 
 }
@@ -495,32 +483,52 @@ function createBooking(data) {
     if (isClosedDay(data.date)) {
       return { success: false, error: "На выбранную дату запись не принимается. Пожалуйста, выберите другой день." };
     }
-
     if (isPastBookingTime(data.date, data.time)) {
       return { success: false, error: "Это время уже прошло. Выберите свободное время позже." };
-    }
-
-    if (!isStartAllowedInSchedule(data.date, data.time, data.service, getScheduleConfig())) {
-      return { success: false, error: "Выбранное время не входит в актуальный график работы." };
     }
 
     // --------------------------------------------------------
     // Проверяем занятость
     // --------------------------------------------------------
 
-    const alreadyBooked = isTimeBusy(
-      data.date,
-      data.time,
-      null,
-      data.service
-    );
+    const alreadyBooked =
+      bookings.some(
+        function(booking) {
+
+          return (
+
+            booking.date ===
+              String(data.date)
+
+            &&
+
+            booking.time ===
+              String(data.time)
+
+            &&
+
+            booking.status !==
+              "Отменена"
+
+          );
+
+        }
+      );
+
 
     if (alreadyBooked) {
+
       return {
+
         success: false,
-        error: "Это время пересекается с другой записью"
+
+        error:
+          "Это время уже занято"
+
       };
+
     }
+
 
     // --------------------------------------------------------
     // ID
@@ -719,16 +727,12 @@ function addAdminBooking(data) {
     if (isClosedDay(data.date)) {
       return { success: false, error: "Выбранный день отмечен как выходной" };
     }
-    if (!isStartAllowedInSchedule(data.date, data.time, data.service, getScheduleConfig())) {
-      return { success: false, error: "Выбранное время не входит в актуальный график работы." };
-    }
 
     if (
       isTimeBusy(
         data.date,
         data.time,
-        null,
-        data.service
+        null
       )
     ) {
 
@@ -939,17 +943,11 @@ function updateAdminBookingInternal(data) {
     return { success: false, error: "Выбранный день отмечен как выходной" };
   }
 
-  const newService = data.service !== undefined ? data.service : booking.service;
-  if (!isStartAllowedInSchedule(newDate, newTime, newService, getScheduleConfig())) {
-    return { success: false, error: "Выбранное время не входит в актуальный график работы." };
-  }
-
   if (
     isTimeBusy(
       newDate,
       newTime,
-      data.id,
-      newService
+      data.id
     )
   ) {
 
@@ -1343,25 +1341,73 @@ function findBookingById(id) {
 // excludeId нужен при редактировании собственной записи.
 // ============================================================
 
-function isTimeBusy(date, time, excludeId, service) {
-  const targetDate = normalizeDate(date);
-  const config = getScheduleConfig();
-  const requestedStart = timeToMinutes(normalizeTime(time));
-  if (requestedStart < 0) return true;
-  const requestedEnd = requestedStart + getServiceDuration(service, config);
-  const bookings = getBookings(getSheet());
+function isTimeBusy(
+  date,
+  time,
+  excludeId
+) {
 
-  return bookings.some(function(booking) {
-    if (booking.status === "Отменена") return false;
-    if (excludeId && String(booking.id) === String(excludeId)) return false;
-    if (booking.date !== targetDate) return false;
+  const sheet =
+    getSheet();
 
-    const bookedStart = timeToMinutes(normalizeTime(booking.time));
-    if (bookedStart < 0) return false;
-    const bookedEnd = bookedStart + getServiceDuration(booking.service, config);
-    return requestedStart < bookedEnd && bookedStart < requestedEnd;
-  });
+
+  const bookings =
+    getBookings(sheet);
+
+
+  const targetDate =
+    normalizeDate(date);
+
+
+  const targetTime =
+    normalizeTime(time);
+
+
+  return bookings.some(
+    function(booking) {
+
+      // Отменённые записи свободны
+      if (
+        booking.status ===
+        "Отменена"
+      ) {
+
+        return false;
+
+      }
+
+
+      // При редактировании
+      // собственную запись исключаем
+      if (
+        excludeId &&
+        String(booking.id) ===
+        String(excludeId)
+      ) {
+
+        return false;
+
+      }
+
+
+      return (
+
+        booking.date ===
+        targetDate
+
+        &&
+
+        booking.time ===
+        targetTime
+
+      );
+
+    }
+  );
+
 }
+
+
 
 // ============================================================
 // ПРОВЕРКА ADMIN API TOKEN
@@ -2167,133 +2213,6 @@ function pad2(number) {
 }
 
 // ============================================================
-// НАСТРОЙКИ ГРАФИКА И ДЛИТЕЛЬНОСТИ ПРОЦЕДУР
-// ============================================================
-
-function getDefaultScheduleConfig() {
-  return {
-    startTime: "10:00",
-    endTime: "19:00",
-    intervalMinutes: 60,
-    serviceDurations: {
-      "Маникюр": 60,
-      "Педикюр": 60,
-      "Депиляция": 60
-    }
-  };
-}
-
-function getScheduleConfig() {
-  const raw = PropertiesService.getScriptProperties().getProperty("SCHEDULE_CONFIG");
-  const defaults = getDefaultScheduleConfig();
-  if (!raw) return defaults;
-  try {
-    const saved = JSON.parse(raw);
-    return {
-      startTime: isValidTimeString(saved.startTime) ? saved.startTime : defaults.startTime,
-      endTime: isValidTimeString(saved.endTime) ? saved.endTime : defaults.endTime,
-      intervalMinutes: [15, 30, 45, 60].indexOf(Number(saved.intervalMinutes)) !== -1 ? Number(saved.intervalMinutes) : defaults.intervalMinutes,
-      serviceDurations: Object.assign({}, defaults.serviceDurations, saved.serviceDurations || {})
-    };
-  } catch (error) {
-    return defaults;
-  }
-}
-
-function setScheduleConfig(schedule) {
-  if (!schedule || !isValidTimeString(schedule.startTime) || !isValidTimeString(schedule.endTime)) {
-    return { success: false, error: "Укажите корректное время начала и окончания рабочего дня." };
-  }
-  const start = timeToMinutes(schedule.startTime);
-  const end = timeToMinutes(schedule.endTime);
-  const interval = Number(schedule.intervalMinutes);
-  if (end <= start) return { success: false, error: "Время окончания должно быть позже времени начала." };
-  if ([15, 30, 45, 60].indexOf(interval) === -1) return { success: false, error: "Выберите шаг записи 15, 30, 45 или 60 минут." };
-
-  const defaults = getDefaultScheduleConfig();
-  const durations = {};
-  Object.keys(defaults.serviceDurations).forEach(function(service) {
-    const duration = Number(schedule.serviceDurations && schedule.serviceDurations[service]);
-    if (!Number.isInteger(duration) || duration < 15 || duration > 360 || duration % 15 !== 0) {
-      throw new Error("Длительность «" + service + "» должна быть от 15 до 360 минут, кратной 15.");
-    }
-    durations[service] = duration;
-  });
-  const normalized = {
-    startTime: schedule.startTime,
-    endTime: schedule.endTime,
-    intervalMinutes: interval,
-    serviceDurations: durations
-  };
-  Object.keys(durations).forEach(function(service) {
-    if (durations[service] > end - start) {
-      throw new Error("Рабочий день короче длительности процедуры «" + service + "».");
-    }
-  });
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const timezone = Session.getScriptTimeZone();
-    const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
-    const futureBookings = getBookings(getSheet()).filter(function(booking) {
-      return booking.status !== "Отменена" && booking.date >= today;
-    });
-    const invalidBookings = futureBookings.filter(function(booking) {
-      return !isStartAllowedInSchedule(booking.date, booking.time, booking.service, normalized);
-    });
-    for (let i = 0; i < futureBookings.length; i++) {
-      for (let j = i + 1; j < futureBookings.length; j++) {
-        const first = futureBookings[i];
-        const second = futureBookings[j];
-        if (first.date !== second.date) continue;
-        const firstStart = timeToMinutes(normalizeTime(first.time));
-        const secondStart = timeToMinutes(normalizeTime(second.time));
-        const firstEnd = firstStart + getServiceDuration(first.service, normalized);
-        const secondEnd = secondStart + getServiceDuration(second.service, normalized);
-        if (firstStart < secondEnd && secondStart < firstEnd) {
-          if (invalidBookings.indexOf(first) === -1) invalidBookings.push(first);
-          if (invalidBookings.indexOf(second) === -1) invalidBookings.push(second);
-        }
-      }
-    }
-    if (invalidBookings.length) {
-      const details = invalidBookings.map(function(booking) {
-        return booking.date.split("-").reverse().join(".") + " в " + booking.time + " (" + booking.service + ")";
-      });
-      return { success: false, error: "Изменение графика конфликтует с записями: " + details.join(", ") + ". Перенесите их или скорректируйте длительность." };
-    }
-    PropertiesService.getScriptProperties().setProperty("SCHEDULE_CONFIG", JSON.stringify(normalized));
-    return { success: true, schedule: normalized };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function isValidTimeString(value) {
-  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(String(value || ""));
-}
-
-function timeToMinutes(value) {
-  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : -1;
-}
-
-function isStartAllowedInSchedule(date, time, service, config) {
-  const start = timeToMinutes(normalizeTime(time));
-  const workStart = timeToMinutes(config.startTime);
-  const workEnd = timeToMinutes(config.endTime);
-  if (start < workStart || start < 0) return false;
-  if ((start - workStart) % config.intervalMinutes !== 0) return false;
-  return start + getServiceDuration(service, config) <= workEnd;
-}
-
-function getServiceDuration(service, config) {
-  const minutes = Number(config.serviceDurations && config.serviceDurations[service]);
-  return Number.isInteger(minutes) && minutes > 0 ? minutes : config.intervalMinutes;
-}
-
-// ============================================================
 // ВЫХОДНЫЕ ДНИ (хранятся в Script Properties)
 // ============================================================
 function getClosedDays() {
@@ -2325,14 +2244,11 @@ function setClosedDays(dates) {
   const normalized = Array.from(new Set(dates.map(String).filter(function(date) {
     return /^\d{4}-\d{2}-\d{2}$/.test(date);
   }))).sort();
-
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const previous = getClosedDays();
-    const newlyClosed = normalized.filter(function(date) {
-      return previous.indexOf(date) === -1;
-    });
+    const newlyClosed = normalized.filter(function(date) { return previous.indexOf(date) === -1; });
     const conflicts = getBookings(getSheet()).filter(function(booking) {
       return newlyClosed.indexOf(booking.date) !== -1 && booking.status !== "Отменена";
     });
@@ -2341,10 +2257,7 @@ function setClosedDays(dates) {
         const date = String(booking.date || "").split("-").reverse().join(".");
         return date + (booking.time ? " в " + booking.time : "") + (booking.name ? " — " + booking.name : "");
       });
-      return {
-        success: false,
-        error: "Нельзя установить выходной: на эту дату есть активная запись (" + details.join("; ") + "). Сначала перенесите или отмените запись."
-      };
+      return { success: false, error: "Нельзя установить выходной: на эту дату есть активная запись (" + details.join("; ") + "). Сначала перенесите или отмените запись." };
     }
     PropertiesService.getScriptProperties().setProperty("CLOSED_DAYS", JSON.stringify(normalized));
     return { success: true, closedDays: normalized };
