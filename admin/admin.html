@@ -802,6 +802,17 @@
        ОБНОВИТЬ
   ========================== -->
 
+      <section style="background:#fff;padding:18px;border-radius:12px;margin:0 0 20px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <h2 style="margin:0 0 12px">Выходные дни</h2>
+        <p style="margin:0 0 12px;color:#666">На выбранные даты клиенты не смогут записаться.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input type="date" id="closedDayInput" class="date-input" style="margin:0;max-width:220px">
+          <button type="button" id="addClosedDayButton" class="refresh-button">Добавить выходной</button>
+        </div>
+        <div id="closedDaysList" style="margin-top:12px"></div>
+        <div id="closedDaysError" style="color:#b42318;margin-top:8px"></div>
+      </section>
+
       <div class="refresh-container">
 
         <button id="refreshButton" class="refresh-button">
@@ -1046,15 +1057,83 @@
       "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
     /* =====================================================
        GOOGLE АВТОРИЗАЦИЯ
-    =====================================================
-
-
-    const GOOGLE_CLIENT_ID =
-      "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
+    ===================================================== */
 
     // ID-токен Google хранится только в памяти текущей страницы.
     // Повторный вход выполняется автоматически через Google Identity Services.
     let GOOGLE_ID_TOKEN = "";
+
+    const closedDayInput = document.getElementById("closedDayInput");
+    const addClosedDayButton = document.getElementById("addClosedDayButton");
+    const closedDaysList = document.getElementById("closedDaysList");
+    const closedDaysError = document.getElementById("closedDaysError");
+    let closedDays = [];
+
+    function formatClosedDay(date) {
+      const parts = date.split("-");
+      return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : date;
+    }
+
+    function renderClosedDays() {
+      closedDaysList.replaceChildren();
+      if (!closedDays.length) {
+        closedDaysList.textContent = "Выходные даты не добавлены.";
+        return;
+      }
+      closedDays.forEach(date => {
+        const item = document.createElement("div");
+        item.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #eee";
+        const label = document.createElement("span");
+        label.textContent = formatClosedDay(date);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Удалить";
+        remove.className = "delete-button";
+        remove.addEventListener("click", () => saveClosedDays(closedDays.filter(day => day !== date)));
+        item.append(label, remove);
+        closedDaysList.appendChild(item);
+      });
+    }
+
+    async function loadClosedDays() {
+      try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || "Не удалось загрузить выходные");
+        closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];
+        renderClosedDays();
+      } catch (error) {
+        closedDaysError.textContent = error.message;
+      }
+    }
+
+    async function saveClosedDays(dates) {
+      closedDaysError.textContent = "";
+      addClosedDayButton.disabled = true;
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "setClosedDays", dates, idToken: GOOGLE_ID_TOKEN })
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || "Не удалось сохранить выходные");
+        closedDays = result.closedDays || dates;
+        renderClosedDays();
+      } catch (error) {
+        closedDaysError.textContent = error.message;
+      } finally {
+        addClosedDayButton.disabled = false;
+      }
+    }
+
+    addClosedDayButton.addEventListener("click", () => {
+      const date = closedDayInput.value;
+      if (!date) { closedDaysError.textContent = "Выберите дату."; return; }
+      if (closedDays.includes(date)) { closedDaysError.textContent = "Эта дата уже добавлена."; return; }
+      saveClosedDays([...closedDays, date].sort());
+      closedDayInput.value = "";
+    });
 
     /* =====================================================
        РАБОЧЕЕ ВРЕМЯ
@@ -2417,6 +2496,7 @@
         document.getElementById("adminApp").style.display = "block";
 
         setToday();
+        loadClosedDays();
         loadBookings();
 
       } catch (error) {

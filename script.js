@@ -54,6 +54,8 @@ const newBookingButton =
 const timeButtons =
   document.querySelectorAll(".time-button");
 
+let closedDayDates = [];
+
 
 // ==========================================================
 // ТЕКУЩАЯ ДАТА
@@ -501,9 +503,18 @@ async function loadBusyTimes() {
         ? result.bookings
         : [];
 
-
-    const selectedDate =
-      dateInput.value;
+    closedDayDates = Array.isArray(result.closedDays) ? result.closedDays : [];
+    const selectedDate = dateInput.value;
+    const selectedDayIsClosed = closedDayDates.includes(selectedDate);
+    if (selectedDayIsClosed) {
+      showError("В этот день студия не работает. Пожалуйста, выберите другую дату.");
+      if (selectedTimeInput) selectedTimeInput.value = "";
+    }
+    timeButtons.forEach(function(button) {
+      button.disabled = selectedDayIsClosed;
+      if (selectedDayIsClosed) button.classList.add("busy");
+      else button.classList.remove("busy");
+    });
 
 
     timeButtons.forEach(
@@ -514,7 +525,7 @@ async function loadBusyTimes() {
 
 
         const isBusy =
-          bookings.some(
+          selectedDayIsClosed || bookings.some(
             function (booking) {
 
               return (
@@ -915,9 +926,13 @@ if (bookingForm) {
             ? checkResult.bookings
             : [];
 
-
-        const selectedDate =
-          dateInput.value;
+        const selectedDate = dateInput.value;
+        const closedDays = Array.isArray(checkResult.closedDays) ? checkResult.closedDays : [];
+        if (closedDays.includes(selectedDate)) {
+          showError("В этот день студия не работает. Пожалуйста, выберите другую дату.");
+          await loadBusyTimes();
+          return;
+        }
 
 
         const selectedTime =
