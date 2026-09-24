@@ -62,8 +62,14 @@ function doGet(e) {
   try {
 
     const sheet = getSheet();
-
-    const bookings = getBookings(sheet);
+    const requestedDate = String(e && e.parameter && e.parameter.date || "");
+    const bookings = requestedDate
+      ? getBookings(sheet).filter(function(booking) {
+          return booking.date === requestedDate;
+        }).map(function(booking) {
+          return { date: booking.date, time: booking.time, status: booking.status };
+        })
+      : [];
     const closedDays = getClosedDays();
     const timezone = Session.getScriptTimeZone();
     const now = new Date();

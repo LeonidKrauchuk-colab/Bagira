@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-static-v3";
+const CACHE_NAME = "bagira-static-v4";
 
 const APP_SHELL = [
   "./",
@@ -114,28 +114,6 @@ async function cacheFirst(request) {
   const cached = await caches.match(request);
 
   if (cached) {
-
-    // Обновляем файл в фоне
-    fetch(request)
-      .then((response) => {
-
-        if (response && response.ok) {
-
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-
-              cache.put(
-                request,
-                response
-              );
-
-            });
-
-        }
-
-      })
-      .catch(() => { });
-
     return cached;
   }
 

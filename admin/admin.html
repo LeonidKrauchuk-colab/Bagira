@@ -1097,7 +1097,7 @@
 
     async function loadClosedDays() {
       try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?settings=1&t=${Date.now()}`);
         const result = await response.json();
         if (!result.success) throw new Error(result.error || "Не удалось загрузить выходные");
         closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];

@@ -469,7 +469,7 @@ async function loadBusyTimes() {
 
     const response =
       await fetch(
-        `${SCRIPT_URL}?t=${Date.now()}`
+        `${SCRIPT_URL}?date=${encodeURIComponent(dateInput.value)}&t=${Date.now()}`
       );
 
 
@@ -650,12 +650,14 @@ loadBusyTimes();
 
 setInterval(
   function () {
-
-    loadBusyTimes();
-
+    if (document.visibilityState === "visible") loadBusyTimes();
   },
-  30000
+  120000
 );
+
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") loadBusyTimes();
+});
 
 
 // ==========================================================
@@ -889,7 +891,7 @@ if (bookingForm) {
 
         const checkResponse =
           await fetch(
-            `${SCRIPT_URL}?t=${Date.now()}`
+            `${SCRIPT_URL}?date=${encodeURIComponent(dateInput.value)}&t=${Date.now()}`
           );
 
 
@@ -1120,7 +1122,7 @@ if (bookingForm) {
 
         const verifyResponse =
           await fetch(
-            `${SCRIPT_URL}?t=${Date.now()}`
+            `${SCRIPT_URL}?date=${encodeURIComponent(booking.date)}&t=${Date.now()}`
           );
 
 
@@ -1149,10 +1151,7 @@ if (bookingForm) {
                     booking.date &&
 
                     item.time ===
-                    booking.time &&
-
-                    item.name ===
-                    booking.name
+                    booking.time
 
                   );
 
@@ -1955,17 +1954,6 @@ if ("serviceWorker" in navigator) {
       );
 
 
-      // Проверяем наличие новой версии
-      // сразу после запуска
-      await registration.update();
-
-
-      // Проверяем новую версию периодически
-      setInterval(() => {
-
-        registration.update();
-
-      }, 30000);
 
 
     } catch (error) {
