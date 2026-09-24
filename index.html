@@ -25,6 +25,250 @@
       <meta content="#111111" name="theme-color" />
       <meta content="yes" name="mobile-web-app-capable" />
 </head>
+<!-- =========================================
+     PWA INSTALL — БАГИРА
+     iPhone + Android
+========================================= -->
+
+<div class="pwa-install-overlay" id="pwaInstallOverlay">
+
+      <div class="pwa-install-modal">
+
+            <!-- Закрыть -->
+            <button class="pwa-close" id="pwaClose" aria-label="Закрыть">
+                  ×
+            </button>
+
+
+            <!-- Иконка -->
+            <div class="pwa-icon">
+                  <img src="icons/icon-192.png" alt="Багира">
+            </div>
+
+
+            <!-- Заголовок -->
+            <h2 id="pwaTitle">
+                  Установите «Багира»
+            </h2>
+
+
+            <p class="pwa-subtitle" id="pwaSubtitle">
+                  Добавьте приложение на экран телефона,
+                  чтобы быстро открывать сайт.
+            </p>
+
+
+            <!-- =====================================
+             IPHONE / SAFARI
+        ====================================== -->
+
+            <div class="pwa-content" id="pwaIOS">
+
+                  <div class="pwa-steps">
+
+                        <!-- Шаг 1 -->
+                        <div class="pwa-step">
+
+                              <div class="pwa-step-number">
+                                    1
+                              </div>
+
+                              <div class="pwa-step-content">
+
+                                    <h3>
+                                          Нажмите «Поделиться»
+                                    </h3>
+
+                                    <p>
+                                          В Safari нажмите кнопку
+                                          <span class="pwa-share-icon">
+                                                □↑
+                                          </span>
+                                          <b>«Поделиться»</b>
+                                          внизу экрана.
+                                    </p>
+
+                              </div>
+
+                        </div>
+
+
+                        <!-- Шаг 2 -->
+                        <div class="pwa-step">
+
+                              <div class="pwa-step-number">
+                                    2
+                              </div>
+
+                              <div class="pwa-step-content">
+
+                                    <h3>
+                                          Выберите «На экран Домой»
+                                    </h3>
+
+                                    <p>
+                                          Пролистайте меню вниз
+                                          и выберите
+                                          <b>«На экран Домой»</b>.
+                                    </p>
+
+                              </div>
+
+                        </div>
+
+
+                        <!-- Шаг 3 -->
+                        <div class="pwa-step">
+
+                              <div class="pwa-step-number">
+                                    3
+                              </div>
+
+                              <div class="pwa-step-content">
+
+                                    <h3>
+                                          Нажмите «Добавить»
+                                    </h3>
+
+                                    <p>
+                                          В правом верхнем углу
+                                          нажмите <b>«Добавить»</b>.
+                                    </p>
+
+                              </div>
+
+                        </div>
+
+                  </div>
+
+
+                  <div class="pwa-tip">
+
+                        <span>💡</span>
+
+                        <p>
+                              После установки иконка
+                              <b>«Багира»</b> появится
+                              на экране iPhone.
+                        </p>
+
+                  </div>
+
+            </div>
+
+
+            <!-- =====================================
+             IPHONE НЕ SAFARI
+        ====================================== -->
+
+            <div class="pwa-content" id="pwaIOSNotSafari">
+
+                  <div class="pwa-browser-icon">
+                        🧭
+                  </div>
+
+                  <h3>
+                        Откройте сайт в Safari
+                  </h3>
+
+                  <p>
+                        Для установки приложения
+                        на iPhone откройте этот сайт
+                        в браузере <b>Safari</b>.
+                  </p>
+
+            </div>
+
+
+            <!-- =====================================
+             ANDROID — АВТОМАТИЧЕСКАЯ УСТАНОВКА
+        ====================================== -->
+
+            <div class="pwa-content" id="pwaAndroidInstall">
+
+                  <div class="pwa-android-icon">
+                        📲
+                  </div>
+
+                  <h3>
+                        Приложение готово к установке
+                  </h3>
+
+                  <p>
+                        Установите «Багира» на телефон,
+                        чтобы открывать сайт прямо
+                        с главного экрана.
+                  </p>
+
+            </div>
+
+
+            <!-- =====================================
+             ANDROID — РУЧНАЯ УСТАНОВКА
+        ====================================== -->
+
+            <div class="pwa-content" id="pwaAndroidManual">
+
+                  <div class="pwa-android-icon">
+                        📲
+                  </div>
+
+                  <h3>
+                        Добавьте «Багиру» на экран
+                  </h3>
+
+                  <div class="pwa-android-steps">
+
+                        <div class="pwa-android-step">
+                              <span>1</span>
+                              <p>
+                                    Откройте меню браузера
+                                    <b>⋮</b>
+                              </p>
+                        </div>
+
+                        <div class="pwa-android-step">
+                              <span>2</span>
+                              <p>
+                                    Выберите
+                                    <b>«Установить приложение»</b>
+                                    или
+                                    <b>«Добавить на главный экран»</b>
+                              </p>
+                        </div>
+
+                        <div class="pwa-android-step">
+                              <span>3</span>
+                              <p>
+                                    Подтвердите установку.
+                              </p>
+                        </div>
+
+                  </div>
+
+            </div>
+
+
+            <!-- =====================================
+             КНОПКИ
+        ====================================== -->
+
+            <div class="pwa-buttons">
+
+                  <button class="pwa-install-button" id="pwaInstallButton">
+                        Установить «Багира»
+                  </button>
+
+
+                  <button class="pwa-later-button" id="pwaLaterButton">
+                        Напомнить позже
+                  </button>
+
+            </div>
+
+      </div>
+
+</div>
 
 <body>
       <!-- ================= HEADER ================= -->

@@ -1978,3 +1978,434 @@ if ("serviceWorker" in navigator) {
   );
 
 }
+/* =========================================
+   PWA INSTALL SYSTEM — БАГИРА
+   iPhone + Android
+========================================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  const overlay =
+    document.getElementById("pwaInstallOverlay");
+
+  const closeButton =
+    document.getElementById("pwaClose");
+
+  const installButton =
+    document.getElementById("pwaInstallButton");
+
+  const laterButton =
+    document.getElementById("pwaLaterButton");
+
+  const ios =
+    document.getElementById("pwaIOS");
+
+  const iosNotSafari =
+    document.getElementById("pwaIOSNotSafari");
+
+  const androidInstall =
+    document.getElementById("pwaAndroidInstall");
+
+  const androidManual =
+    document.getElementById("pwaAndroidManual");
+
+
+  if (!overlay) return;
+
+
+  /* =========================================
+     ОПРЕДЕЛЯЕМ УСТРОЙСТВО
+  ========================================= */
+
+  const userAgent =
+    navigator.userAgent || navigator.vendor || window.opera;
+
+
+  const isIOS =
+    /iPhone|iPad|iPod/i.test(userAgent);
+
+
+  const isAndroid =
+    /Android/i.test(userAgent);
+
+
+  /* =========================================
+     PWA УЖЕ УСТАНОВЛЕНО?
+  ========================================= */
+
+  const isStandalone =
+
+    window.matchMedia(
+      "(display-mode: standalone)"
+    ).matches ||
+
+    window.navigator.standalone === true;
+
+
+  if (isStandalone) {
+
+    return;
+
+  }
+
+
+  /* =========================================
+     ТОЛЬКО МОБИЛЬНЫЕ
+  ========================================= */
+
+  if (!isIOS && !isAndroid) {
+
+    return;
+
+  }
+
+
+  /* =========================================
+     ПРОВЕРЯЕМ "НАПОМИНАНИЕ ПОЗЖЕ"
+  ========================================= */
+
+  const hiddenUntil =
+    localStorage.getItem(
+      "bagiraPwaHiddenUntil"
+    );
+
+
+  if (hiddenUntil) {
+
+    const hiddenTime =
+      Number(hiddenUntil);
+
+
+    if (
+      Date.now() < hiddenTime
+    ) {
+
+      return;
+
+    }
+
+  }
+
+
+  /* =========================================
+     SAFARI?
+  ========================================= */
+
+  const isSafari =
+
+    /^((?!chrome|android|crios|fxios|edgios|opera).)*safari/i
+      .test(userAgent);
+
+
+  /* =========================================
+     ANDROID INSTALL PROMPT
+  ========================================= */
+
+  let deferredPrompt = null;
+
+
+  /* =========================================
+     ПОЛУЧАЕМ СИСТЕМНОЕ ОКНО УСТАНОВКИ
+  ========================================= */
+
+  window.addEventListener(
+    "beforeinstallprompt",
+    (event) => {
+
+      event.preventDefault();
+
+      deferredPrompt = event;
+
+
+      /*
+       * Если это Android,
+       * показываем настоящее
+       * предложение установки.
+       */
+
+      if (isAndroid) {
+
+        showAndroidInstall();
+
+      }
+
+    }
+  );
+
+
+  /* =========================================
+     ПОКАЗ ANDROID
+  ========================================= */
+
+  function showAndroidInstall() {
+
+    ios.style.display = "none";
+
+    iosNotSafari.style.display = "none";
+
+    androidManual.style.display = "none";
+
+    androidInstall.style.display = "block";
+
+
+    installButton.style.display =
+      "block";
+
+
+    installButton.textContent =
+      "Установить «Багира»";
+
+
+    showModal();
+
+  }
+
+
+  /* =========================================
+     ANDROID БЕЗ AUTOMATIC PROMPT
+  ========================================= */
+
+  function showAndroidManual() {
+
+    ios.style.display = "none";
+
+    iosNotSafari.style.display = "none";
+
+    androidInstall.style.display =
+      "none";
+
+    androidManual.style.display =
+      "block";
+
+
+    installButton.style.display =
+      "none";
+
+
+    showModal();
+
+  }
+
+
+  /* =========================================
+     IOS
+  ========================================= */
+
+  if (isIOS) {
+
+    if (isSafari) {
+
+      ios.style.display =
+        "block";
+
+      iosNotSafari.style.display =
+        "none";
+
+    } else {
+
+      ios.style.display =
+        "none";
+
+      iosNotSafari.style.display =
+        "block";
+
+    }
+
+
+    installButton.textContent =
+      "Понятно";
+
+
+    showModal();
+
+  }
+
+
+  /* =========================================
+     ANDROID
+  ========================================= */
+
+  if (isAndroid) {
+
+    /*
+     * Если beforeinstallprompt
+     * ещё не появился,
+     * ждём немного.
+     */
+
+    setTimeout(() => {
+
+      if (!deferredPrompt) {
+
+        showAndroidManual();
+
+      }
+
+    }, 2500);
+
+  }
+
+
+  /* =========================================
+     ПОКАЗ МОДАЛЬНОГО ОКНА
+  ========================================= */
+
+  function showModal() {
+
+    setTimeout(() => {
+
+      overlay.classList.add("active");
+
+    }, 1000);
+
+  }
+
+
+  /* =========================================
+     НАСТОЯЩАЯ УСТАНОВКА ANDROID
+  ========================================= */
+
+  installButton.addEventListener(
+    "click",
+    async () => {
+
+      /*
+       * Android
+       */
+
+      if (
+        isAndroid &&
+        deferredPrompt
+      ) {
+
+        deferredPrompt.prompt();
+
+
+        const choice =
+          await deferredPrompt.userChoice;
+
+
+        if (
+          choice.outcome ===
+          "accepted"
+        ) {
+
+          localStorage.removeItem(
+            "bagiraPwaHiddenUntil"
+          );
+
+        }
+
+
+        deferredPrompt = null;
+
+        closeModal();
+
+        return;
+
+      }
+
+
+      /*
+       * iPhone
+       */
+
+      closeModal();
+
+    }
+  );
+
+
+  /* =========================================
+     ЗАКРЫТЬ
+  ========================================= */
+
+  closeButton.addEventListener(
+    "click",
+    closeModal
+  );
+
+
+  /* =========================================
+     НАПОМИНАНИЕ ПОЗЖЕ
+  ========================================= */
+
+  laterButton.addEventListener(
+    "click",
+    () => {
+
+      /*
+       * 3 дня
+       */
+
+      const threeDays =
+        3 *
+        24 *
+        60 *
+        60 *
+        1000;
+
+
+      localStorage.setItem(
+        "bagiraPwaHiddenUntil",
+        Date.now() + threeDays
+      );
+
+
+      closeModal();
+
+    }
+  );
+
+
+  /* =========================================
+     КЛИК ПО ФОНУ
+  ========================================= */
+
+  overlay.addEventListener(
+    "click",
+    (event) => {
+
+      if (
+        event.target === overlay
+      ) {
+
+        closeModal();
+
+      }
+
+    }
+  );
+
+
+  /* =========================================
+     ЗАКРЫТИЕ
+  ========================================= */
+
+  function closeModal() {
+
+    overlay.classList.remove(
+      "active"
+    );
+
+  }
+
+
+  /* =========================================
+     ЕСЛИ PWA УСТАНОВИЛОСЬ
+  ========================================= */
+
+  window.addEventListener(
+    "appinstalled",
+    () => {
+
+      localStorage.removeItem(
+        "bagiraPwaHiddenUntil"
+      );
+
+      closeModal();
+
+    }
+  );
+
+});
