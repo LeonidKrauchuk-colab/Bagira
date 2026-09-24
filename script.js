@@ -55,6 +55,7 @@ const timeButtons =
   document.querySelectorAll(".time-button");
 
 let closedDayDates = [];
+const CLOSED_DAY_WARNING = "Мы не работаем в выбранный день. Пожалуйста, выберите другую дату.";
 
 
 // ==========================================================
@@ -507,8 +508,10 @@ async function loadBusyTimes() {
     const selectedDate = dateInput.value;
     const selectedDayIsClosed = closedDayDates.includes(selectedDate);
     if (selectedDayIsClosed) {
-      showError("В этот день студия не работает. Пожалуйста, выберите другую дату.");
+      showError(CLOSED_DAY_WARNING);
       if (selectedTimeInput) selectedTimeInput.value = "";
+    } else if (formError && formError.textContent === CLOSED_DAY_WARNING) {
+      hideError();
     }
     timeButtons.forEach(function(button) {
       button.disabled = selectedDayIsClosed;
@@ -929,7 +932,7 @@ if (bookingForm) {
         const selectedDate = dateInput.value;
         const closedDays = Array.isArray(checkResult.closedDays) ? checkResult.closedDays : [];
         if (closedDays.includes(selectedDate)) {
-          showError("В этот день студия не работает. Пожалуйста, выберите другую дату.");
+          showError(CLOSED_DAY_WARNING);
           await loadBusyTimes();
           return;
         }

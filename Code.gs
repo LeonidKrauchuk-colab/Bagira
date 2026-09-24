@@ -2172,6 +2172,30 @@ function setClosedDays(dates) {
   const normalized = Array.from(new Set(dates.map(String).filter(function(date) {
     return /^\d{4}-\d{2}-\d{2}$/.test(date);
   }))).sort();
-  PropertiesService.getScriptProperties().setProperty("CLOSED_DAYS", JSON.stringify(normalized));
-  return { success: true, closedDays: normalized };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const previous = getClosedDays();
+    const newlyClosed = normalized.filter(function(date) {
+      return previous.indexOf(date) === -1;
+    });
+    const conflicts = getBookings(getSheet()).filter(function(booking) {
+      return newlyClosed.indexOf(booking.date) !== -1 && booking.status !== "Отменена";
+    });
+    if (conflicts.length) {
+      const details = conflicts.map(function(booking) {
+        const date = String(booking.date || "").split("-").reverse().join(".");
+        return date + (booking.time ? " в " + booking.time : "") + (booking.name ? " — " + booking.name : "");
+      });
+      return {
+        success: false,
+        error: "Нельзя установить выходной: на эту дату есть активная запись (" + details.join("; ") + "). Сначала перенесите или отмените запись."
+      };
+    }
+    PropertiesService.getScriptProperties().setProperty("CLOSED_DAYS", JSON.stringify(normalized));
+    return { success: true, closedDays: normalized };
+  } finally {
+    lock.releaseLock();
+  }
 }

@@ -1120,19 +1120,21 @@
         if (!result.success) throw new Error(result.error || "Не удалось сохранить выходные");
         closedDays = result.closedDays || dates;
         renderClosedDays();
+        return true;
       } catch (error) {
         closedDaysError.textContent = error.message;
+        return false;
       } finally {
         addClosedDayButton.disabled = false;
       }
     }
 
-    addClosedDayButton.addEventListener("click", () => {
+    addClosedDayButton.addEventListener("click", async () => {
       const date = closedDayInput.value;
       if (!date) { closedDaysError.textContent = "Выберите дату."; return; }
       if (closedDays.includes(date)) { closedDaysError.textContent = "Эта дата уже добавлена."; return; }
-      saveClosedDays([...closedDays, date].sort());
-      closedDayInput.value = "";
+      const saved = await saveClosedDays([...closedDays, date].sort());
+      if (saved) closedDayInput.value = "";
     });
 
     /* =====================================================
