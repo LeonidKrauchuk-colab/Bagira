@@ -42,6 +42,9 @@ const commentInput =
 const formError =
   document.getElementById("formError");
 
+const dateWarning =
+  document.getElementById("dateWarning");
+
 const bookingSuccess =
   document.getElementById("bookingSuccess");
 
@@ -54,6 +57,8 @@ const newBookingButton =
 let timeButtons = [];
 const timeList = document.getElementById("timeList");
 let scheduleSettings = { bookingDays: 20, weeklySchedule: Array.from({ length: 7 }, (_, day) => ({ day, slots: Array.from({ length: 9 }, (_, index) => `${String(10 + index).padStart(2, "0")}:00`) })) };
+let bookingDateMin = "";
+let bookingDateMax = "";
 
 function scheduleForDate(date, settings = scheduleSettings) {
   if (!date) return null;
@@ -80,14 +85,29 @@ function setBookingDateLimit(today) {
   if (!dateInput || !today) return;
   const utcDate = new Date(`${today}T00:00:00Z`);
   utcDate.setUTCDate(utcDate.getUTCDate() + Number(scheduleSettings.bookingDays || 20));
+  bookingDateMin = today;
+  bookingDateMax = utcDate.toISOString().slice(0, 10);
   dateInput.min = today;
-  dateInput.max = utcDate.toISOString().slice(0, 10);
+  dateInput.max = bookingDateMax;
+  updateDateWarning();
+}
+
+function updateDateWarning(date = dateInput?.value) {
+  if (!dateWarning) return false;
+  const schedule = scheduleForDate(date);
+  const outsideHorizon = Boolean(date && bookingDateMax && date > bookingDateMax);
+  const oneTimeClosed = closedDayDates.includes(date);
+  const weeklyClosed = !schedule || !Array.isArray(schedule.slots) || schedule.slots.length === 0;
+  const shouldWarn = outsideHorizon || oneTimeClosed || weeklyClosed;
+  dateWarning.textContent = shouldWarn ? CLOSED_DAY_WARNING : "";
+  dateWarning.style.display = shouldWarn ? "block" : "none";
+  return shouldWarn;
 }
 
 renderTimeButtons();
 
 let closedDayDates = [];
-const CLOSED_DAY_WARNING = "Мы не работаем в выбранный день. Пожалуйста, выберите другую дату.";
+const CLOSED_DAY_WARNING = "Мы не работаем в выбранный день или дата выходит за пределы периода записи. Пожалуйста, выберите другую дату.";
 
 
 // ==========================================================
@@ -127,6 +147,8 @@ if (dateInput) {
       todayString;
 
   }
+
+  setBookingDateLimit(todayString);
 
 }
 
@@ -510,14 +532,11 @@ async function loadBusyTimes() {
     setBookingDateLimit(result.today || new Date().toISOString().slice(0, 10));
     const selectedDate = dateInput.value;
     const daySchedule = scheduleForDate(selectedDate);
-    const selectedDayIsClosed = closedDayDates.includes(selectedDate) || !daySchedule || !Array.isArray(daySchedule.slots) || daySchedule.slots.length === 0;
+    const selectedDayIsClosed = updateDateWarning(selectedDate);
     const serverToday = result.today || "";
     const serverTime = result.currentTime || "";
     if (selectedDayIsClosed) {
-      showError(CLOSED_DAY_WARNING);
       if (selectedTimeInput) selectedTimeInput.value = "";
-    } else if (formError && formError.textContent === CLOSED_DAY_WARNING) {
-      hideError();
     }
 
     timeButtons.forEach(
@@ -616,6 +635,14 @@ if (dateInput) {
     function () {
 
       renderTimeButtons(dateInput.value);
+      const dateBlocked = updateDateWarning(dateInput.value);
+      if (dateBlocked) {
+        timeButtons.forEach(button => {
+          button.disabled = true;
+          button.classList.add("busy");
+        });
+      }
+      hideError();
 
       if (
         selectedTimeInput
@@ -834,6 +861,8 @@ if (bookingForm) {
 
       }
 
+      if (updateDateWarning(dateInput.value)) return;
+
 
       // ----------------------------------------------------
       // ПРОВЕРКА ВРЕМЕНИ
@@ -926,6 +955,13 @@ if (bookingForm) {
 
         }
 
+        closedDayDates = Array.isArray(checkResult.closedDays) ? checkResult.closedDays : closedDayDates;
+        if (checkResult.scheduleSettings) {
+          scheduleSettings = { ...scheduleSettings, ...checkResult.scheduleSettings };
+          renderTimeButtons(dateInput.value);
+        }
+        if (checkResult.today) setBookingDateLimit(checkResult.today);
+
 
         const bookings =
           Array.isArray(
@@ -939,15 +975,15 @@ if (bookingForm) {
           dateInput.value;
 
 
-        const selectedTime =
-          selectedTimeInput.value;
-
-        const closedDays = Array.isArray(checkResult.closedDays) ? checkResult.closedDays : [];
-        if (closedDays.includes(selectedDate)) {
-          showError(CLOSED_DAY_WARNING);
+        if (updateDateWarning(selectedDate)) {
           await loadBusyTimes();
           return;
         }
+
+
+        const selectedTime =
+          selectedTimeInput.value;
+
         const currentTime = checkResult.currentTime || "";
         if (selectedDate === checkResult.today && currentTime && selectedTime <= currentTime) {
           showError("Это время уже прошло. Выберите свободное время позже.");
