@@ -802,15 +802,35 @@
        ОБНОВИТЬ
   ========================== -->
 
-      <section style="background:#fff;padding:18px;border-radius:12px;margin:0 0 20px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-        <h2 style="margin:0 0 12px">Выходные дни</h2>
-        <p style="margin:0 0 12px;color:#666">На выбранные даты клиенты не смогут записаться.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <input type="date" id="closedDayInput" class="date-input" style="display:block;margin:0;max-width:220px">
-          <button type="button" id="addClosedDayButton" class="refresh-button">Добавить выходной</button>
+      <section style="background:#fff;padding:12px 14px;border-radius:12px;margin:0 0 18px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <button type="button" id="scheduleSettingsToggle" aria-expanded="false" aria-controls="scheduleSettingsPanel" class="refresh-button" style="width:100%;text-align:left">⚙️ Настройки расписания <span id="scheduleSettingsChevron" style="float:right">＋</span></button>
+        <div id="scheduleSettingsPanel" hidden style="padding-top:14px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+            <label style="display:grid;gap:5px">Слотов в день
+              <input type="number" id="slotCountInput" min="1" max="24" value="9" style="width:110px;padding:9px;border:1px solid #ccc;border-radius:7px">
+            </label>
+            <label style="display:grid;gap:5px">Начало первого слота
+              <input type="time" id="slotStartInput" value="10:00" style="padding:8px;border:1px solid #ccc;border-radius:7px">
+            </label>
+            <label style="display:grid;gap:5px">Запись вперёд, дней
+              <input type="number" id="bookingDaysInput" min="1" max="365" value="20" style="width:130px;padding:9px;border:1px solid #ccc;border-radius:7px">
+            </label>
+          </div>
+          <small style="display:block;color:#666;margin:7px 0 12px">Слоты идут с интервалом 1 час. Например, 9 слотов с 10:00 — с 10:00 до 18:00.</small>
+          <div style="font-weight:600;margin-bottom:7px">Постоянные выходные</div>
+          <div id="weeklyDaysOptions" style="display:flex;gap:8px 14px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <button type="button" id="saveScheduleSettingsButton" class="refresh-button">Сохранить расписание</button>
+          <div id="scheduleSettingsError" style="color:#b42318;margin-top:8px"></div>
+          <hr style="border:0;border-top:1px solid #eee;margin:16px 0">
+          <h3 style="margin:0 0 8px;font-size:17px">Разовые выходные</h3>
+          <p style="margin:0 0 10px;color:#666">Если на выбранную дату уже есть запись, выходной не сохранится.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <input type="date" id="closedDayInput" class="date-input" style="display:block;margin:0;max-width:220px">
+            <button type="button" id="addClosedDayButton" class="refresh-button">Добавить дату</button>
+          </div>
+          <div id="closedDaysList" style="margin-top:10px"></div>
+          <div id="closedDaysError" style="color:#b42318;margin-top:8px"></div>
         </div>
-        <div id="closedDaysList" style="margin-top:12px"></div>
-        <div id="closedDaysError" style="color:#b42318;margin-top:8px"></div>
       </section>
 
       <div class="refresh-container">
@@ -1068,6 +1088,38 @@
     const closedDaysList = document.getElementById("closedDaysList");
     const closedDaysError = document.getElementById("closedDaysError");
     let closedDays = [];
+    const scheduleSettingsToggle = document.getElementById("scheduleSettingsToggle");
+    const scheduleSettingsPanel = document.getElementById("scheduleSettingsPanel");
+    const scheduleSettingsChevron = document.getElementById("scheduleSettingsChevron");
+    const slotCountInput = document.getElementById("slotCountInput");
+    const slotStartInput = document.getElementById("slotStartInput");
+    const bookingDaysInput = document.getElementById("bookingDaysInput");
+    const weeklyDaysOptions = document.getElementById("weeklyDaysOptions");
+    const saveScheduleSettingsButton = document.getElementById("saveScheduleSettingsButton");
+    const scheduleSettingsError = document.getElementById("scheduleSettingsError");
+    const WEEKDAY_NAMES = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+    let scheduleSettings = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+
+    scheduleSettingsToggle.addEventListener("click", () => {
+      const expanded = scheduleSettingsToggle.getAttribute("aria-expanded") === "true";
+      scheduleSettingsToggle.setAttribute("aria-expanded", String(!expanded));
+      scheduleSettingsPanel.hidden = expanded;
+      scheduleSettingsChevron.textContent = expanded ? "＋" : "−";
+    });
+
+    function renderWeeklyDays(selectedDays) {
+      weeklyDaysOptions.replaceChildren();
+      WEEKDAY_NAMES.forEach((name, day) => {
+        const label = document.createElement("label");
+        label.style.cssText = "display:flex;align-items:center;gap:5px;cursor:pointer";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = String(day);
+        checkbox.checked = selectedDays.includes(day);
+        label.append(checkbox, document.createTextNode(name));
+        weeklyDaysOptions.appendChild(label);
+      });
+    }
 
     function formatClosedDay(date) {
       const parts = date.split("-");
@@ -1099,13 +1151,59 @@
       try {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?settings=1&t=${Date.now()}`);
         const result = await response.json();
-        if (!result.success) throw new Error(result.error || "Не удалось загрузить выходные");
+        if (!result.success) throw new Error(result.error || "Не удалось загрузить настройки расписания");
         closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];
+        if (result.scheduleSettings) {
+          scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
+          slotCountInput.value = scheduleSettings.slotCount;
+          slotStartInput.value = scheduleSettings.startTime;
+          bookingDaysInput.value = scheduleSettings.bookingDays;
+          renderWeeklyDays(scheduleSettings.weeklyDays || []);
+          WORK_TIMES = buildWorkTimes(scheduleSettings);
+          document.getElementById("totalCount").textContent = WORK_TIMES.length;
+        }
         renderClosedDays();
       } catch (error) {
         closedDaysError.textContent = error.message;
+        scheduleSettingsError.textContent = error.message;
       }
     }
+
+    saveScheduleSettingsButton.addEventListener("click", async () => {
+      scheduleSettingsError.textContent = "";
+      const settings = {
+        slotCount: Number(slotCountInput.value),
+        startTime: slotStartInput.value,
+        bookingDays: Number(bookingDaysInput.value),
+        weeklyDays: Array.from(weeklyDaysOptions.querySelectorAll("input:checked"), input => Number(input.value))
+      };
+      if (!Number.isInteger(settings.slotCount) || settings.slotCount < 1 || settings.slotCount > 24) {
+        scheduleSettingsError.textContent = "Количество слотов должно быть от 1 до 24.";
+        return;
+      }
+      if (!Number.isInteger(settings.bookingDays) || settings.bookingDays < 1 || settings.bookingDays > 365) {
+        scheduleSettingsError.textContent = "Период записи должен быть от 1 до 365 дней.";
+        return;
+      }
+      saveScheduleSettingsButton.disabled = true;
+      try {
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "setScheduleSettings", settings, idToken: GOOGLE_ID_TOKEN })
+        });
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || "Не удалось сохранить расписание");
+        scheduleSettings = result.scheduleSettings;
+        WORK_TIMES = buildWorkTimes(scheduleSettings);
+        document.getElementById("totalCount").textContent = WORK_TIMES.length;
+        await loadBookings();
+      } catch (error) {
+        scheduleSettingsError.textContent = error.message;
+      } finally {
+        saveScheduleSettingsButton.disabled = false;
+      }
+    });
 
     async function saveClosedDays(dates) {
       closedDaysError.textContent = "";
@@ -1141,10 +1239,16 @@
        РАБОЧЕЕ ВРЕМЯ
     ===================================================== */
 
-    const WORK_TIMES = [
-      "10:00", "11:00", "12:00", "13:00", "14:00",
-      "15:00", "16:00", "17:00", "18:00"
-    ];
+    function buildWorkTimes(settings) {
+      const [hours, minutes] = String(settings.startTime || "10:00").split(":").map(Number);
+      const start = hours * 60 + minutes;
+      return Array.from({ length: Number(settings.slotCount) || 9 }, (_, index) => {
+        const slot = start + index * 60;
+        return `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`;
+      }).filter(time => Number(time.slice(0, 2)) < 24);
+    }
+
+    let WORK_TIMES = buildWorkTimes(scheduleSettings);
 
 
     /* =====================================================
@@ -2432,8 +2536,8 @@
         document.getElementById("adminApp").style.display = "block";
 
         setToday();
-        loadClosedDays();
-        loadBookings();
+        await loadClosedDays();
+        await loadBookings();
 
       } catch (error) {
 

@@ -71,6 +71,7 @@ function doGet(e) {
         })
       : [];
     const closedDays = getClosedDays();
+    const scheduleSettings = getScheduleSettings();
     const timezone = Session.getScriptTimeZone();
     const now = new Date();
 
@@ -78,6 +79,7 @@ function doGet(e) {
       success: true,
       bookings: bookings,
       closedDays: closedDays,
+      scheduleSettings: scheduleSettings,
       today: Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
       currentTime: Utilities.formatDate(now, timezone, "HH:mm")
     });
@@ -148,6 +150,13 @@ if (
         return jsonResponse({ success: false, error: "Доступ запрещён" });
       }
       return jsonResponse(setClosedDays(data.dates));
+    }
+
+    if (data.action === "setScheduleSettings") {
+      if (!checkGoogleAdminAccess(data.idToken)) {
+        return jsonResponse({ success: false, error: "Доступ запрещён" });
+      }
+      return jsonResponse(setScheduleSettings(data.settings));
     }
 
     // --------------------------------------------------------
@@ -486,6 +495,12 @@ function createBooking(data) {
     const bookings =
       getBookings(sheet);
 
+    if (!isBookingDateAllowed(data.date)) {
+      return { success: false, error: "Запись доступна только в пределах установленного периода." };
+    }
+    if (!isBookingTimeAllowed(data.time)) {
+      return { success: false, error: "Выберите время из доступных слотов." };
+    }
     if (isClosedDay(data.date)) {
       return { success: false, error: "На выбранную дату запись не принимается. Пожалуйста, выберите другой день." };
     }
@@ -730,6 +745,9 @@ function addAdminBooking(data) {
     const sheet =
       getSheet();
 
+    if (!isBookingTimeAllowed(data.time)) {
+      return { success: false, error: "Выберите время из доступных слотов." };
+    }
     if (isClosedDay(data.date)) {
       return { success: false, error: "Выбранный день отмечен как выходной" };
     }
@@ -943,6 +961,10 @@ function updateAdminBookingInternal(data) {
     data.time !== null
       ? String(data.time)
       : booking.time;
+
+  if (newTime !== booking.time && !isBookingTimeAllowed(newTime)) {
+    return { success: false, error: "Выберите время из доступных слотов." };
+  }
 
 
   if (newDate !== booking.date && isClosedDay(newDate)) {
@@ -2221,6 +2243,75 @@ function pad2(number) {
 // ============================================================
 // ВЫХОДНЫЕ ДНИ (хранятся в Script Properties)
 // ============================================================
+function getScheduleSettings() {
+  const defaults = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+  const raw = PropertiesService.getScriptProperties().getProperty("SCHEDULE_SETTINGS");
+  if (!raw) return defaults;
+  try {
+    const saved = JSON.parse(raw) || {};
+    return {
+      slotCount: Math.max(1, Math.min(24, parseInt(saved.slotCount, 10) || defaults.slotCount)),
+      startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(saved.startTime || "")) ? String(saved.startTime) : defaults.startTime,
+      bookingDays: Math.max(1, Math.min(365, parseInt(saved.bookingDays, 10) || defaults.bookingDays)),
+      weeklyDays: Array.isArray(saved.weeklyDays) ? Array.from(new Set(saved.weeklyDays.map(Number).filter(function(day) { return Number.isInteger(day) && day >= 0 && day <= 6; }))).sort() : []
+    };
+  } catch (error) {
+    return defaults;
+  }
+}
+
+function getScheduleTimes(settings) {
+  const config = settings || getScheduleSettings();
+  const parts = config.startTime.split(":").map(Number);
+  const start = parts[0] * 60 + parts[1];
+  const count = Math.max(1, Math.min(24, config.slotCount));
+  return Array.from({ length: count }, function(_, index) {
+    const minutes = start + index * 60;
+    return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+  });
+}
+
+function isBookingTimeAllowed(time) {
+  return getScheduleTimes().indexOf(String(time || "").slice(0, 5)) !== -1;
+}
+
+function getDateAfterDays(days) {
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd").split("-").map(Number);
+  return new Date(Date.UTC(today[0], today[1] - 1, today[2] + days)).toISOString().slice(0, 10);
+}
+
+function isBookingDateAllowed(date) {
+  const value = String(date || "");
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= today && value <= getDateAfterDays(getScheduleSettings().bookingDays);
+}
+
+function setScheduleSettings(input) {
+  if (!input || typeof input !== "object") return { success: false, error: "Некорректные настройки расписания." };
+  const slotCount = Number(input.slotCount);
+  const bookingDays = Number(input.bookingDays);
+  const startTime = String(input.startTime || "");
+  const weeklyDays = Array.isArray(input.weeklyDays) ? Array.from(new Set(input.weeklyDays.map(Number).filter(function(day) { return Number.isInteger(day) && day >= 0 && day <= 6; }))).sort() : [];
+  if (!Number.isInteger(slotCount) || slotCount < 1 || slotCount > 24) return { success: false, error: "Количество слотов должно быть от 1 до 24." };
+  if (!Number.isInteger(bookingDays) || bookingDays < 1 || bookingDays > 365) return { success: false, error: "Период записи должен быть от 1 до 365 дней." };
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) return { success: false, error: "Укажите корректное время начала." };
+  const schedule = { slotCount: slotCount, startTime: startTime, bookingDays: bookingDays, weeklyDays: weeklyDays };
+  const times = getScheduleTimes(schedule);
+  if (Number(times[times.length - 1].slice(0, 2)) >= 24) return { success: false, error: "Слоты не должны выходить за пределы суток." };
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  const conflicts = getBookings(getSheet()).filter(function(booking) {
+    if (booking.status === "Отменена" || String(booking.date || "") < today) return false;
+    const parts = String(booking.date || "").split("-").map(Number);
+    const weekday = parts.length === 3 ? new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay() : -1;
+    return weeklyDays.indexOf(weekday) !== -1 || !times.includes(String(booking.time || "").slice(0, 5));
+  });
+  if (conflicts.length) {
+    return { success: false, error: "Настройки конфликтуют с существующими записями: " + conflicts.slice(0, 5).map(function(booking) { return String(booking.date).split("-").reverse().join(".") + (booking.time ? " в " + booking.time : ""); }).join(", ") + ". Сначала перенесите или отмените запись." };
+  }
+  PropertiesService.getScriptProperties().setProperty("SCHEDULE_SETTINGS", JSON.stringify(schedule));
+  return { success: true, scheduleSettings: schedule };
+}
+
 function getClosedDays() {
   const raw = PropertiesService.getScriptProperties().getProperty("CLOSED_DAYS");
   if (!raw) return [];
@@ -2233,7 +2324,12 @@ function getClosedDays() {
 }
 
 function isClosedDay(date) {
-  return getClosedDays().indexOf(String(date || "")) !== -1;
+  const value = String(date || "");
+  if (getClosedDays().indexOf(value) !== -1) return true;
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3) return false;
+  const weekday = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay();
+  return getScheduleSettings().weeklyDays.indexOf(weekday) !== -1;
 }
 
 function isPastBookingTime(date, time) {

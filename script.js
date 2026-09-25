@@ -51,8 +51,38 @@ const bookingDetails =
 const newBookingButton =
   document.getElementById("newBooking");
 
-const timeButtons =
-  document.querySelectorAll(".time-button");
+let timeButtons = [];
+const timeList = document.getElementById("timeList");
+let scheduleSettings = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+
+function renderTimeButtons() {
+  if (!timeList) return;
+  const parts = scheduleSettings.startTime.split(":").map(Number);
+  const start = parts[0] * 60 + parts[1];
+  timeList.replaceChildren();
+  for (let index = 0; index < scheduleSettings.slotCount; index++) {
+    const minutes = start + index * 60;
+    if (minutes >= 24 * 60) break;
+    const time = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    const button = document.createElement("button");
+    button.className = "time-button";
+    button.dataset.time = time;
+    button.type = "button";
+    button.textContent = time;
+    timeList.appendChild(button);
+  }
+  timeButtons = Array.from(timeList.querySelectorAll(".time-button"));
+}
+
+function setBookingDateLimit(today) {
+  if (!dateInput || !today) return;
+  const utcDate = new Date(`${today}T00:00:00Z`);
+  utcDate.setUTCDate(utcDate.getUTCDate() + Number(scheduleSettings.bookingDays || 20));
+  dateInput.min = today;
+  dateInput.max = utcDate.toISOString().slice(0, 10);
+}
+
+renderTimeButtons();
 
 let closedDayDates = [];
 const CLOSED_DAY_WARNING = "Мы не работаем в выбранный день. Пожалуйста, выберите другую дату.";
@@ -401,55 +431,16 @@ function formatDateForDisplay(
 // ВЫБОР ВРЕМЕНИ
 // ==========================================================
 
-timeButtons.forEach(
-  function (button) {
-
-    button.addEventListener(
-      "click",
-      function () {
-
-        if (
-          button.disabled
-        ) {
-
-          return;
-
-        }
-
-
-        timeButtons.forEach(
-          function (item) {
-
-            item.classList.remove(
-              "selected"
-            );
-
-          }
-        );
-
-
-        button.classList.add(
-          "selected"
-        );
-
-
-        if (
-          selectedTimeInput
-        ) {
-
-          selectedTimeInput.value =
-            button.dataset.time;
-
-        }
-
-
-        hideError();
-
-      }
-    );
-
-  }
-);
+if (timeList) {
+  timeList.addEventListener("click", function(event) {
+    const button = event.target.closest(".time-button");
+    if (!button || button.disabled) return;
+    timeButtons.forEach(item => item.classList.remove("selected"));
+    button.classList.add("selected");
+    if (selectedTimeInput) selectedTimeInput.value = button.dataset.time;
+    hideError();
+  });
+}
 
 
 // ==========================================================
@@ -506,8 +497,18 @@ async function loadBusyTimes() {
 
 
     closedDayDates = Array.isArray(result.closedDays) ? result.closedDays : [];
+    if (result.scheduleSettings && typeof result.scheduleSettings === "object") {
+      const previousSettings = JSON.stringify(scheduleSettings);
+      scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
+      if (JSON.stringify(scheduleSettings) !== previousSettings) {
+        renderTimeButtons();
+        if (selectedTimeInput) selectedTimeInput.value = "";
+      }
+    }
+    setBookingDateLimit(result.today || new Date().toISOString().slice(0, 10));
     const selectedDate = dateInput.value;
-    const selectedDayIsClosed = closedDayDates.includes(selectedDate);
+    const selectedWeekday = selectedDate ? new Date(`${selectedDate}T00:00:00Z`).getUTCDay() : -1;
+    const selectedDayIsClosed = closedDayDates.includes(selectedDate) || (scheduleSettings.weeklyDays || []).includes(selectedWeekday);
     const serverToday = result.today || "";
     const serverTime = result.currentTime || "";
     if (selectedDayIsClosed) {
