@@ -10,10 +10,9 @@
 // 5. Отмена записи из админ-панели
 // 6. Удаление записи из админ-панели
 // 7. Проверка занятости времени
-// 8. Уведомление о новой записи в Telegram
+// 8. Подтверждение и отмена новых записей из Telegram
 //
-// Telegram НЕ управляет записями.
-// Telegram используется только для уведомлений.
+// Telegram-кнопки переводят заявку в активную или отменённую запись.
 // ============================================================
 
 
@@ -26,6 +25,7 @@ const SHEET_NAME = "Записи";
 
 const TELEGRAM_BOT_TOKEN_PROPERTY =
   "TELEGRAM_BOT_TOKEN";
+const TELEGRAM_WEBHOOK_SECRET_PROPERTY = "TELEGRAM_WEBHOOK_SECRET";
 
 // ============================================================
 // GOOGLE АВТОРИЗАЦИЯ АДМИН-ПАНЕЛИ
@@ -117,6 +117,11 @@ function doPost(e) {
 
     const data =
       JSON.parse(e.postData.contents || "{}");
+
+    // Telegram callback updates share this endpoint with the website API.
+    if (data && data.callback_query) {
+      return jsonResponse(handleTelegramBookingCallback(data.callback_query, e));
+    }
 // --------------------------------------------------------
 // ПРОВЕРКА ДОСТУПА АДМИНИСТРАТОРА
 // --------------------------------------------------------
@@ -400,7 +405,7 @@ function getBookings(sheet) {
         2,
         1,
         lastRow - 1,
-        10
+        12
       )
       .getValues();
 
@@ -438,7 +443,11 @@ function getBookings(sheet) {
           String(row[8] || ""),
 
         createdAt:
-          normalizeCreatedAt(row[9])
+          normalizeCreatedAt(row[9]),
+
+        adminTelegramMessageId: String(row[10] || ""),
+
+        masterTelegramMessageId: String(row[11] || "")
 
       };
 
@@ -589,9 +598,13 @@ function createBooking(data) {
 
       data.comment || "",
 
-      "Активна",
+      "Ожидает подтверждения",
 
-      createdAt
+      createdAt,
+
+      "",
+
+      ""
 
     ];
 
@@ -619,7 +632,7 @@ function createBooking(data) {
         nextRow,
         1,
         1,
-        10
+        12
       )
       .setValues([
         row
@@ -668,7 +681,10 @@ function createBooking(data) {
           data.time,
 
         comment:
-          data.comment
+          data.comment,
+
+        rowNumber:
+          nextRow
 
       });
 
@@ -800,7 +816,11 @@ function addAdminBooking(data) {
 
       "Активна",
 
-      createdAt
+      createdAt,
+
+      "",
+
+      ""
 
     ];
 
@@ -822,7 +842,7 @@ function addAdminBooking(data) {
         nextRow,
         1,
         1,
-        10
+        12
       )
       .setValues([
         row
@@ -1294,7 +1314,7 @@ function findBookingById(id) {
         2,
         1,
         lastRow - 1,
-        10
+        12
       )
       .getValues();
 
@@ -1347,7 +1367,11 @@ function findBookingById(id) {
           normalizeCreatedAt(row[9]),
 
         rowNumber:
-          i + 2
+          i + 2,
+
+        adminTelegramMessageId: String(row[10] || ""),
+
+        masterTelegramMessageId: String(row[11] || "")
 
       };
 
@@ -1626,7 +1650,7 @@ function sendDailyBookingsSummary() {
   const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
   const bookings = getBookings(getSheet())
     .filter(function(booking) {
-      return booking.date === today && booking.status !== "Отменена";
+      return booking.date === today && booking.status === "Активна";
     })
     .sort(function(a, b) {
       return String(a.time || "").localeCompare(String(b.time || ""));
@@ -1652,7 +1676,7 @@ function sendDailyBookingsSummary() {
   const url = "https://api.telegram.org/bot" + token + "/sendMessage";
 
   recipientIds.forEach(function(chatId) {
-    sendTelegramMessage(url, chatId, message);
+    telegramApiCall("sendMessage", { chat_id: chatId, text: message, parse_mode: "HTML" });
   });
 }
 
@@ -1674,227 +1698,190 @@ function installDailyBookingsSummaryTrigger() {
 }
 
 // ============================================================
-// TELEGRAM
-// Только уведомление о новой записи
+// TELEGRAM: сообщения с кнопками подтверждения и отмены
 // ============================================================
 
-function sendNewBookingTelegram(booking) {
+function formatBookingTelegramMessage(booking, outcome) {
+  const heading = outcome === "confirm"
+    ? "✅ <b>Заказ подтвержден</b>\n\n"
+    : outcome === "cancel"
+      ? "❌ <b>Заказ отменен</b>\n\n"
+      : "🔔 <b>НОВАЯ ЗАПИСЬ</b>\n\n";
 
-  if (!booking) {
-
-    throw new Error(
-      "Нет данных записи"
-    );
-
-  }
-
-
-  const token =
-    PropertiesService
-      .getScriptProperties()
-      .getProperty(
-        TELEGRAM_BOT_TOKEN_PROPERTY
-      );
-
-
-  const adminChatId =
-    PropertiesService
-      .getScriptProperties()
-      .getProperty(
-        ADMIN_TELEGRAM_USER_ID_PROPERTY
-      );
-
-
-  const masterChatId =
-    PropertiesService
-      .getScriptProperties()
-      .getProperty(
-        MASTER_TELEGRAM_USER_ID_PROPERTY
-      );
-
-
-  if (!token) {
-
-    throw new Error(
-      "TELEGRAM_BOT_TOKEN не найден"
-    );
-
-  }
-
-
-  if (!adminChatId) {
-
-    throw new Error(
-      "ADMIN_TELEGRAM_USER_ID не найден"
-    );
-
-  }
-
-
-  if (!masterChatId) {
-
-    throw new Error(
-      "MASTER_TELEGRAM_USER_ID не найден"
-    );
-
-  }
-
-
-  const message =
-
-    "🔔 <b>НОВАЯ ЗАПИСЬ</b>\n\n" +
-
-    "👤 <b>Имя:</b> " +
-    escapeTelegram(
-      booking.name
-    ) +
-    "\n" +
-
-    "📞 <b>Телефон:</b> " +
-    escapeTelegram(
-      booking.phone
-    ) +
-    "\n" +
-
-    "💬 <b>Telegram:</b> " +
-    escapeTelegram(
-      booking.telegram || "—"
-    ) +
-    "\n" +
-
-    "💅 <b>Услуга:</b> " +
-    escapeTelegram(
-      booking.service
-    ) +
-    "\n" +
-
-    "📅 <b>Дата:</b> " +
-    escapeTelegram(
-      booking.date
-    ) +
-    "\n" +
-
-    "🕐 <b>Время:</b> " +
-    escapeTelegram(
-      booking.time
-    ) +
-    "\n" +
-
-    "📝 <b>Комментарий:</b> " +
-    escapeTelegram(
-      booking.comment || "—"
-    );
-
-
-  const url =
-    "https://api.telegram.org/bot" +
-    token +
-    "/sendMessage";
-
-
-  // =========================
-  // ОТПРАВКА АДМИНИСТРАТОРУ
-  // =========================
-
-  sendTelegramMessage(
-    url,
-    adminChatId,
-    message
-  );
-
-
-  // =========================
-  // ОТПРАВКА МАСТЕРУ
-  // =========================
-
-  sendTelegramMessage(
-    url,
-    masterChatId,
-    message
-  );
-
+  return heading +
+    "👤 <b>Имя:</b> " + escapeTelegram(booking.name) + "\n" +
+    "📞 <b>Телефон:</b> " + escapeTelegram(booking.phone) + "\n" +
+    "💬 <b>Telegram:</b> " + escapeTelegram(booking.telegram || "—") + "\n" +
+    "💅 <b>Услуга:</b> " + escapeTelegram(booking.service) + "\n" +
+    "📅 <b>Дата:</b> " + escapeTelegram(booking.date) + "\n" +
+    "🕐 <b>Время:</b> " + escapeTelegram(booking.time) + "\n" +
+    "📝 <b>Комментарий:</b> " + escapeTelegram(booking.comment || "—");
 }
-//---------------------
-function sendTelegramMessage(
-  url,
-  chatId,
-  message
-) {
 
-  const payload = {
+function telegramApiCall(method, payload) {
+  const token = PropertiesService.getScriptProperties().getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN не найден");
 
-    chat_id:
-      chatId,
+  const response = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/" + method, {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  const raw = response.getContentText();
+  let result;
+  try { result = JSON.parse(raw); } catch (error) {
+    throw new Error("Telegram вернул некорректный ответ: " + raw);
+  }
+  if (!result.ok) throw new Error("Telegram error: " + raw);
+  return result.result;
+}
 
-    text:
-      message,
+function sendNewBookingTelegram(booking) {
+  if (!booking) throw new Error("Нет данных записи");
 
-    parse_mode:
-      "HTML"
+  const properties = PropertiesService.getScriptProperties();
+  const adminChatId = properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY);
+  const masterChatId = properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY);
+  if (!adminChatId) throw new Error("ADMIN_TELEGRAM_USER_ID не найден");
+  if (!masterChatId) throw new Error("MASTER_TELEGRAM_USER_ID не найден");
 
+  const keyboard = {
+    inline_keyboard: [[
+      { text: "Отменить", callback_data: "booking_cancel:" + booking.id },
+      { text: "Подтвердить", callback_data: "booking_confirm:" + booking.id }
+    ]]
   };
+  const message = formatBookingTelegramMessage(booking, "pending");
+  const targets = [
+    { chatId: adminChatId, column: 11 },
+    { chatId: masterChatId, column: 12 }
+  ];
+  targets.forEach(function(target) {
+    const sent = telegramApiCall("sendMessage", {
+      chat_id: target.chatId,
+      text: message,
+      parse_mode: "HTML",
+      reply_markup: keyboard
+    });
+    if (booking.rowNumber && sent && sent.message_id) {
+      getSheet().getRange(booking.rowNumber, target.column).setValue(String(sent.message_id));
+    }
+  });
+}
 
+function handleTelegramBookingCallback(callback, event) {
+  const properties = PropertiesService.getScriptProperties();
+  const secret = properties.getProperty(TELEGRAM_WEBHOOK_SECRET_PROPERTY);
+  const suppliedSecret = event && event.parameter ? event.parameter.telegramSecret : "";
+  if (!secret || suppliedSecret !== secret) {
+    answerTelegramCallback(callback.id, "Запрос не прошел проверку доступа.", true);
+    return { success: false, error: "Webhook access denied" };
+  }
 
-  const response =
-    UrlFetchApp.fetch(
-      url,
-      {
+  const recipients = [
+    String(properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY) || ""),
+    String(properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY) || "")
+  ].filter(Boolean);
+  const senderId = String(callback.from && callback.from.id || "");
+  const chatId = String(callback.message && callback.message.chat && callback.message.chat.id || "");
+  if (!recipients.includes(senderId) || !recipients.includes(chatId)) {
+    answerTelegramCallback(callback.id, "У вас нет доступа к этому действию.", true);
+    return { success: false, error: "Telegram user is not authorized" };
+  }
 
-        method:
-          "post",
+  const match = String(callback.data || "").match(/^booking_(confirm|cancel):([\w-]{1,64})$/);
+  if (!match) {
+    answerTelegramCallback(callback.id, "Неизвестное действие.", true);
+    return { success: false, error: "Invalid callback data" };
+  }
 
-        contentType:
-          "application/json",
-
-        payload:
-          JSON.stringify(payload),
-
-        muteHttpExceptions:
-          true
-
-      }
-    );
-
-
-  const result =
-    response.getContentText();
-
-
-  console.log(
-    "TELEGRAM RESPONSE: " +
-    result
-  );
-
-
-  let telegramResult;
-
-
+  const outcome = match[1];
+  const bookingId = match[2];
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  let booking;
+  let applied = false;
   try {
+    booking = findBookingById(bookingId);
+    if (!booking) {
+      answerTelegramCallback(callback.id, "Заказ не найден.", true);
+      return { success: false, error: "Booking not found" };
+    }
+    if (booking.status === "Ожидает подтверждения") {
+      booking.status = outcome === "confirm" ? "Активна" : "Отменена";
+      getSheet().getRange(booking.rowNumber, 9).setValue(booking.status);
+      applied = true;
+    }
+  } finally {
+    lock.releaseLock();
+  }
 
-    telegramResult =
-      JSON.parse(result);
+  const finalOutcome = booking.status === "Отменена" ? "cancel" : "confirm";
+  editTelegramBookingMessages(booking, callback.message, finalOutcome);
+  answerTelegramCallback(callback.id, applied
+    ? (finalOutcome === "cancel" ? "Заказ отменен" : "Заказ подтвержден")
+    : "Заказ уже обработан");
+  return { success: true, applied: applied, status: booking.status };
+}
 
+function editTelegramBookingMessages(booking, pressedMessage, outcome) {
+  const properties = PropertiesService.getScriptProperties();
+  const chats = [
+    { chatId: String(properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY) || ""), messageId: booking.adminTelegramMessageId },
+    { chatId: String(properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY) || ""), messageId: booking.masterTelegramMessageId }
+  ];
+  const pressedChatId = String(pressedMessage && pressedMessage.chat && pressedMessage.chat.id || "");
+  const pressedMessageId = String(pressedMessage && pressedMessage.message_id || "");
+  if (!chats.some(function(item) { return item.chatId === pressedChatId && String(item.messageId) === pressedMessageId; })) {
+    chats.push({ chatId: pressedChatId, messageId: pressedMessageId });
+  }
+
+  chats.forEach(function(item) {
+    if (!item.chatId || !item.messageId) return;
+    try {
+      telegramApiCall("editMessageText", {
+        chat_id: item.chatId,
+        message_id: Number(item.messageId),
+        text: formatBookingTelegramMessage(booking, outcome),
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [] }
+      });
+    } catch (error) {
+      console.error("Не удалось обновить сообщение Telegram: " + error.message);
+    }
+  });
+}
+
+function answerTelegramCallback(callbackId, text, showAlert) {
+  if (!callbackId) return;
+  try {
+    telegramApiCall("answerCallbackQuery", {
+      callback_query_id: callbackId,
+      text: text || "",
+      show_alert: Boolean(showAlert)
+    });
   } catch (error) {
-
-    throw new Error(
-      "Telegram вернул некорректный ответ: " +
-      result
-    );
-
+    console.error("Не удалось ответить на нажатие Telegram: " + error.message);
   }
+}
 
+// Run once in the Apps Script editor after deploying the web app.
+function installTelegramBookingWebhook() {
+  const properties = PropertiesService.getScriptProperties();
+  const token = properties.getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
+  const deploymentUrl = ScriptApp.getService().getUrl();
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN не найден");
+  if (!deploymentUrl) throw new Error("Сначала разверните проект как веб-приложение");
 
-  if (
-    !telegramResult.ok
-  ) {
-
-    throw new Error(
-      "Telegram error: " +
-      result
-    );
-
+  let secret = properties.getProperty(TELEGRAM_WEBHOOK_SECRET_PROPERTY);
+  if (!secret) {
+    secret = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
+    properties.setProperty(TELEGRAM_WEBHOOK_SECRET_PROPERTY, secret);
   }
-
+  const webhookUrl = deploymentUrl + "?telegramSecret=" + encodeURIComponent(secret);
+  telegramApiCall("setWebhook", { url: webhookUrl, allowed_updates: ["callback_query"] });
+  return { success: true, message: "Telegram webhook установлен." };
 }
 
 // ============================================================

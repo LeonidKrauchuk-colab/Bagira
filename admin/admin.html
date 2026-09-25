@@ -814,7 +814,7 @@
           <div id="weeklyScheduleOptions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:9px;margin-bottom:10px"></div>
           <small style="display:block;color:#666;margin:0 0 12px">Для каждого дня задайте число слотов и время каждого из них. Ноль слотов означает выходной.</small>
           <button type="button" id="saveScheduleSettingsButton" class="refresh-button">Сохранить расписание</button>
-          <div id="scheduleSettingsError" style="color:#b42318;margin-top:8px"></div>
+          <div id="scheduleSettingsError" role="status" aria-live="polite" style="margin-top:8px"></div>
           <hr style="border:0;border-top:1px solid #eee;margin:16px 0">
           <h3 style="margin:0 0 8px;font-size:17px">Разовые выходные</h3>
           <p style="margin:0 0 10px;color:#666">Если на выбранную дату уже есть запись, выходной не сохранится.</p>
@@ -1241,6 +1241,7 @@
 
     saveScheduleSettingsButton.addEventListener("click", async () => {
       scheduleSettingsError.textContent = "";
+      scheduleSettingsError.style.color = "#b42318";
       const settings = {
         bookingDays: Number(bookingDaysInput.value),
         weeklySchedule: Array.from({ length: 7 }, (_, day) => ({
@@ -1269,6 +1270,8 @@
         renderWeeklySchedule(scheduleSettings.weeklySchedule);
         updateWorkTimesForSelectedDate();
         await loadBookings();
+        scheduleSettingsError.style.color = "#16803c";
+        scheduleSettingsError.textContent = "Расписание сохранено.";
       } catch (error) {
         scheduleSettingsError.textContent = error.message;
       } finally {
@@ -1713,7 +1716,7 @@
 
         /*
          * В админ-панели учитываем только активные записи.
-         * "Новая" и "Отменена" полностью игнорируются.
+         * Ожидающие подтверждения и отменённые заявки не показываются.
          */
         const activeBookings = bookings.filter(booking => {
 
