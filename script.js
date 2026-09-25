@@ -53,17 +53,19 @@ const newBookingButton =
 
 let timeButtons = [];
 const timeList = document.getElementById("timeList");
-let scheduleSettings = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+let scheduleSettings = { bookingDays: 20, weeklySchedule: Array.from({ length: 7 }, (_, day) => ({ day, slots: Array.from({ length: 9 }, (_, index) => `${String(10 + index).padStart(2, "0")}:00`) })) };
 
-function renderTimeButtons() {
+function scheduleForDate(date, settings = scheduleSettings) {
+  if (!date) return null;
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return (settings.weeklySchedule || []).find(item => Number(item.day) === day) || null;
+}
+
+function renderTimeButtons(date = dateInput?.value) {
   if (!timeList) return;
-  const parts = scheduleSettings.startTime.split(":").map(Number);
-  const start = parts[0] * 60 + parts[1];
+  const schedule = scheduleForDate(date);
   timeList.replaceChildren();
-  for (let index = 0; index < scheduleSettings.slotCount; index++) {
-    const minutes = start + index * 60;
-    if (minutes >= 24 * 60) break;
-    const time = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  for (const time of (schedule && Array.isArray(schedule.slots) ? schedule.slots : [])) {
     const button = document.createElement("button");
     button.className = "time-button";
     button.dataset.time = time;
@@ -501,14 +503,14 @@ async function loadBusyTimes() {
       const previousSettings = JSON.stringify(scheduleSettings);
       scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
       if (JSON.stringify(scheduleSettings) !== previousSettings) {
-        renderTimeButtons();
+        renderTimeButtons(dateInput.value);
         if (selectedTimeInput) selectedTimeInput.value = "";
       }
     }
     setBookingDateLimit(result.today || new Date().toISOString().slice(0, 10));
     const selectedDate = dateInput.value;
-    const selectedWeekday = selectedDate ? new Date(`${selectedDate}T00:00:00Z`).getUTCDay() : -1;
-    const selectedDayIsClosed = closedDayDates.includes(selectedDate) || (scheduleSettings.weeklyDays || []).includes(selectedWeekday);
+    const daySchedule = scheduleForDate(selectedDate);
+    const selectedDayIsClosed = closedDayDates.includes(selectedDate) || !daySchedule || !Array.isArray(daySchedule.slots) || daySchedule.slots.length === 0;
     const serverToday = result.today || "";
     const serverTime = result.currentTime || "";
     if (selectedDayIsClosed) {
@@ -612,6 +614,8 @@ if (dateInput) {
   dateInput.addEventListener(
     "change",
     function () {
+
+      renderTimeButtons(dateInput.value);
 
       if (
         selectedTimeInput

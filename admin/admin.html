@@ -805,20 +805,14 @@
       <section style="background:#fff;padding:12px 14px;border-radius:12px;margin:0 0 18px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
         <button type="button" id="scheduleSettingsToggle" aria-expanded="false" aria-controls="scheduleSettingsPanel" class="refresh-button" style="width:100%;text-align:left">⚙️ Настройки расписания <span id="scheduleSettingsChevron" style="float:right">＋</span></button>
         <div id="scheduleSettingsPanel" hidden style="padding-top:14px">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
-            <label style="display:grid;gap:5px">Слотов в день
-              <input type="number" id="slotCountInput" min="1" max="24" value="9" style="width:110px;padding:9px;border:1px solid #ccc;border-radius:7px">
-            </label>
-            <label style="display:grid;gap:5px">Начало первого слота
-              <input type="time" id="slotStartInput" value="10:00" style="padding:8px;border:1px solid #ccc;border-radius:7px">
-            </label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
             <label style="display:grid;gap:5px">Запись вперёд, дней
               <input type="number" id="bookingDaysInput" min="1" max="365" value="20" style="width:130px;padding:9px;border:1px solid #ccc;border-radius:7px">
             </label>
           </div>
-          <small style="display:block;color:#666;margin:7px 0 12px">Слоты идут с интервалом 1 час. Например, 9 слотов с 10:00 — с 10:00 до 18:00.</small>
-          <div style="font-weight:600;margin-bottom:7px">Постоянные выходные</div>
-          <div id="weeklyDaysOptions" style="display:flex;gap:8px 14px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div style="font-weight:600;margin-bottom:7px">Расписание и время каждого слота</div>
+          <div id="weeklyScheduleOptions" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:9px;margin-bottom:10px"></div>
+          <small style="display:block;color:#666;margin:0 0 12px">Для каждого дня задайте число слотов и время каждого из них. Ноль слотов означает выходной.</small>
           <button type="button" id="saveScheduleSettingsButton" class="refresh-button">Сохранить расписание</button>
           <div id="scheduleSettingsError" style="color:#b42318;margin-top:8px"></div>
           <hr style="border:0;border-top:1px solid #eee;margin:16px 0">
@@ -1091,14 +1085,14 @@
     const scheduleSettingsToggle = document.getElementById("scheduleSettingsToggle");
     const scheduleSettingsPanel = document.getElementById("scheduleSettingsPanel");
     const scheduleSettingsChevron = document.getElementById("scheduleSettingsChevron");
-    const slotCountInput = document.getElementById("slotCountInput");
-    const slotStartInput = document.getElementById("slotStartInput");
     const bookingDaysInput = document.getElementById("bookingDaysInput");
-    const weeklyDaysOptions = document.getElementById("weeklyDaysOptions");
+    const weeklyScheduleOptions = document.getElementById("weeklyScheduleOptions");
     const saveScheduleSettingsButton = document.getElementById("saveScheduleSettingsButton");
     const scheduleSettingsError = document.getElementById("scheduleSettingsError");
-    const WEEKDAY_NAMES = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
-    let scheduleSettings = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+    const WEEKDAY_NAMES = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+    const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+    const DEFAULT_SLOTS = Array.from({ length: 9 }, (_, index) => `${String(10 + index).padStart(2, "0")}:00`);
+    let scheduleSettings = { bookingDays: 20, weeklySchedule: Array.from({ length: 7 }, (_, day) => ({ day, slots: [...DEFAULT_SLOTS] })) };
 
     scheduleSettingsToggle.addEventListener("click", () => {
       const expanded = scheduleSettingsToggle.getAttribute("aria-expanded") === "true";
@@ -1107,18 +1101,97 @@
       scheduleSettingsChevron.textContent = expanded ? "＋" : "−";
     });
 
-    function renderWeeklyDays(selectedDays) {
-      weeklyDaysOptions.replaceChildren();
-      WEEKDAY_NAMES.forEach((name, day) => {
-        const label = document.createElement("label");
-        label.style.cssText = "display:flex;align-items:center;gap:5px;cursor:pointer";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = String(day);
-        checkbox.checked = selectedDays.includes(day);
-        label.append(checkbox, document.createTextNode(name));
-        weeklyDaysOptions.appendChild(label);
+    function renderWeeklySchedule(weeklySchedule = scheduleSettings.weeklySchedule) {
+      weeklyScheduleOptions.replaceChildren();
+      WEEKDAY_ORDER.forEach(day => {
+        const name = WEEKDAY_NAMES[day];
+        const schedule = weeklySchedule.find(item => Number(item.day) === day) || { slots: [...DEFAULT_SLOTS] };
+        const slots = Array.isArray(schedule.slots) ? [...schedule.slots] : [];
+        const card = document.createElement("section");
+        card.style.cssText = "border:1px solid #e5e5e5;border-radius:9px;padding:10px;min-width:0";
+        const heading = document.createElement("div");
+        heading.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px";
+        const dayLabel = document.createElement("strong");
+        dayLabel.textContent = name;
+        const count = document.createElement("input");
+        count.type = "number";
+        count.min = "0";
+        count.max = "24";
+        count.value = slots.length;
+        count.dataset.daySlotCount = String(day);
+        count.setAttribute("aria-label", `Количество слотов: ${name}`);
+        count.style.cssText = "width:76px;padding:7px;border:1px solid #ccc;border-radius:7px";
+        heading.append(dayLabel, count);
+        const times = document.createElement("div");
+        times.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px";
+        slots.forEach((time, index) => {
+          const input = document.createElement("input");
+          input.type = "time";
+          input.value = time;
+          input.dataset.slotDay = String(day);
+          input.dataset.slotIndex = String(index);
+          input.setAttribute("aria-label", `${name}, слот ${index + 1}`);
+          input.style.cssText = "width:100%;min-width:0;padding:6px;border:1px solid #ccc;border-radius:7px";
+          times.appendChild(input);
+        });
+        if (!slots.length) {
+          const off = document.createElement("small");
+          off.textContent = "Выходной · «Мы не работаем»";
+          off.style.color = "#666";
+          times.appendChild(off);
+        }
+        count.addEventListener("change", () => {
+          const requested = Number(count.value);
+          const currentSlots = [...(scheduleSettings.weeklySchedule.find(item => Number(item.day) === day)?.slots || [])];
+          if (!Number.isInteger(requested) || requested < 0 || requested > 24) {
+            scheduleSettingsError.textContent = "Укажите от 0 до 24 слотов для каждого дня.";
+            count.value = currentSlots.length;
+            return;
+          }
+          const nextSlots = currentSlots.slice(0, requested);
+          let last = nextSlots.length ? Number(nextSlots[nextSlots.length - 1].slice(0, 2)) * 60 + Number(nextSlots[nextSlots.length - 1].slice(3)) : 9 * 60;
+          while (nextSlots.length < requested) {
+            last += 60;
+            if (last >= 24 * 60) {
+              scheduleSettingsError.textContent = "Нельзя добавить слоты после 23:00.";
+              count.value = nextSlots.length;
+              break;
+            }
+            nextSlots.push(`${String(Math.floor(last / 60)).padStart(2, "0")}:${String(last % 60).padStart(2, "0")}`);
+          }
+          scheduleSettingsError.textContent = "";
+          scheduleSettings.weeklySchedule = scheduleSettings.weeklySchedule.map(item => Number(item.day) === day ? { day, slots: nextSlots } : item);
+          renderWeeklySchedule();
+        });
+        times.addEventListener("change", event => {
+          const input = event.target.closest("[data-slot-index]");
+          if (!input) return;
+          const slotIndex = Number(input.dataset.slotIndex);
+          const daySlots = [...(scheduleSettings.weeklySchedule.find(item => Number(item.day) === day)?.slots || [])];
+          daySlots[slotIndex] = input.value;
+          scheduleSettings.weeklySchedule = scheduleSettings.weeklySchedule.map(item => Number(item.day) === day ? { day, slots: daySlots } : item);
+        });
+        card.append(heading, times);
+        weeklyScheduleOptions.appendChild(card);
       });
+    }
+
+    function getScheduleForDate(date) {
+      if (!date) return null;
+      const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+      return scheduleSettings.weeklySchedule.find(item => Number(item.day) === weekday) || null;
+    }
+
+    function buildWorkTimes(settings, date) {
+      if (!date) return [];
+      const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+      const schedule = settings.weeklySchedule.find(item => Number(item.day) === weekday);
+      return schedule && Array.isArray(schedule.slots) ? [...schedule.slots] : [];
+    }
+
+    function updateWorkTimesForSelectedDate() {
+      WORK_TIMES = buildWorkTimes(scheduleSettings, selectedDate.value);
+      document.getElementById("totalCount").textContent = WORK_TIMES.length;
     }
 
     function formatClosedDay(date) {
@@ -1155,12 +1228,9 @@
         closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];
         if (result.scheduleSettings) {
           scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
-          slotCountInput.value = scheduleSettings.slotCount;
-          slotStartInput.value = scheduleSettings.startTime;
           bookingDaysInput.value = scheduleSettings.bookingDays;
-          renderWeeklyDays(scheduleSettings.weeklyDays || []);
-          WORK_TIMES = buildWorkTimes(scheduleSettings);
-          document.getElementById("totalCount").textContent = WORK_TIMES.length;
+          renderWeeklySchedule(scheduleSettings.weeklySchedule || []);
+          updateWorkTimesForSelectedDate();
         }
         renderClosedDays();
       } catch (error) {
@@ -1172,17 +1242,18 @@
     saveScheduleSettingsButton.addEventListener("click", async () => {
       scheduleSettingsError.textContent = "";
       const settings = {
-        slotCount: Number(slotCountInput.value),
-        startTime: slotStartInput.value,
         bookingDays: Number(bookingDaysInput.value),
-        weeklyDays: Array.from(weeklyDaysOptions.querySelectorAll("input:checked"), input => Number(input.value))
+        weeklySchedule: Array.from({ length: 7 }, (_, day) => ({
+          day,
+          slots: Array.from(weeklyScheduleOptions.querySelectorAll(`[data-slot-day="${day}"]`), input => input.value)
+        }))
       };
-      if (!Number.isInteger(settings.slotCount) || settings.slotCount < 1 || settings.slotCount > 24) {
-        scheduleSettingsError.textContent = "Количество слотов должно быть от 1 до 24.";
-        return;
-      }
       if (!Number.isInteger(settings.bookingDays) || settings.bookingDays < 1 || settings.bookingDays > 365) {
         scheduleSettingsError.textContent = "Период записи должен быть от 1 до 365 дней.";
+        return;
+      }
+      if (settings.weeklySchedule.some(item => item.slots.length > 24 || item.slots.some(time => !time) || new Set(item.slots).size !== item.slots.length)) {
+        scheduleSettingsError.textContent = "Укажите корректное уникальное время каждого слота (не более 24 в день).";
         return;
       }
       saveScheduleSettingsButton.disabled = true;
@@ -1195,8 +1266,8 @@
         const result = await response.json();
         if (!result.success) throw new Error(result.error || "Не удалось сохранить расписание");
         scheduleSettings = result.scheduleSettings;
-        WORK_TIMES = buildWorkTimes(scheduleSettings);
-        document.getElementById("totalCount").textContent = WORK_TIMES.length;
+        renderWeeklySchedule(scheduleSettings.weeklySchedule);
+        updateWorkTimesForSelectedDate();
         await loadBookings();
       } catch (error) {
         scheduleSettingsError.textContent = error.message;
@@ -1239,16 +1310,7 @@
        РАБОЧЕЕ ВРЕМЯ
     ===================================================== */
 
-    function buildWorkTimes(settings) {
-      const [hours, minutes] = String(settings.startTime || "10:00").split(":").map(Number);
-      const start = hours * 60 + minutes;
-      return Array.from({ length: Number(settings.slotCount) || 9 }, (_, index) => {
-        const slot = start + index * 60;
-        return `${String(Math.floor(slot / 60)).padStart(2, "0")}:${String(slot % 60).padStart(2, "0")}`;
-      }).filter(time => Number(time.slice(0, 2)) < 24);
-    }
-
-    let WORK_TIMES = buildWorkTimes(scheduleSettings);
+    let WORK_TIMES = [];
 
 
     /* =====================================================
@@ -1601,6 +1663,8 @@
 
     async function loadBookings() {
 
+      updateWorkTimesForSelectedDate();
+
       hideError();
 
       bookingsContainer.innerHTML = `
@@ -1682,6 +1746,12 @@
         const bookingList = document.createElement("div");
         bookingList.className = "booking-list";
 
+        const weekdaySchedule = getScheduleForDate(date);
+        const selectedDayClosed = closedDays.includes(date) || !weekdaySchedule || !Array.isArray(weekdaySchedule.slots) || weekdaySchedule.slots.length === 0;
+
+        if (selectedDayClosed) {
+          bookingList.textContent = "Выходной день — запись не принимается.";
+        } else {
         /* =================================================
            АКТИВНЫЕ И СВОБОДНЫЕ
         ================================================= */
@@ -1706,6 +1776,7 @@
           }
 
         });
+        }
 
         dayElement.appendChild(bookingList);
         bookingsContainer.appendChild(dayElement);
@@ -1924,6 +1995,21 @@
 
     }
 
+    function updateBookingTimeOptions(date, selectedTime) {
+      const times = buildWorkTimes(scheduleSettings, date);
+      bookingTime.innerHTML = `<option value="">Выберите время</option>`;
+      if (selectedTime && !times.includes(selectedTime)) times.push(selectedTime);
+      times.forEach(time => {
+        const option = document.createElement("option");
+        option.value = time;
+        option.textContent = time;
+        bookingTime.appendChild(option);
+      });
+      bookingTime.value = selectedTime || "";
+    }
+
+    bookingDate.addEventListener("change", () => updateBookingTimeOptions(bookingDate.value, ""));
+
 
     /* =====================================================
        ОТКРЫТЬ ФОРМУ НОВОЙ ЗАПИСИ
@@ -1943,14 +2029,7 @@
         date;
 
 
-      bookingTime.innerHTML = `<option value="">Выберите время</option>`;
-      WORK_TIMES.forEach(workTime => {
-        const option = document.createElement("option");
-        option.value = workTime;
-        option.textContent = workTime;
-        bookingTime.appendChild(option);
-      });
-      bookingTime.value = time;
+      updateBookingTimeOptions(date, time);
       bookingService.value = "";
 
 
@@ -2005,14 +2084,7 @@
 
       bookingDate.value = booking.date || "";
 
-      bookingTime.innerHTML = `<option value="">Выберите время</option>`;
-      WORK_TIMES.forEach(workTime => {
-        const option = document.createElement("option");
-        option.value = workTime;
-        option.textContent = workTime;
-        bookingTime.appendChild(option);
-      });
-      bookingTime.value = String(booking.time || "").trim().substring(0, 5);
+      updateBookingTimeOptions(booking.date, String(booking.time || "").trim().substring(0, 5));
 
       bookingService.value = booking.service || "";
 

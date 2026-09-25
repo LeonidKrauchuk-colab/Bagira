@@ -498,11 +498,11 @@ function createBooking(data) {
     if (!isBookingDateAllowed(data.date)) {
       return { success: false, error: "Запись доступна только в пределах установленного периода." };
     }
-    if (!isBookingTimeAllowed(data.time)) {
-      return { success: false, error: "Выберите время из доступных слотов." };
-    }
     if (isClosedDay(data.date)) {
       return { success: false, error: "На выбранную дату запись не принимается. Пожалуйста, выберите другой день." };
+    }
+    if (!isBookingTimeAllowed(data.time, data.date)) {
+      return { success: false, error: "Выберите время из доступных слотов." };
     }
     if (isPastBookingTime(data.date, data.time)) {
       return { success: false, error: "Это время уже прошло. Выберите свободное время позже." };
@@ -745,11 +745,11 @@ function addAdminBooking(data) {
     const sheet =
       getSheet();
 
-    if (!isBookingTimeAllowed(data.time)) {
-      return { success: false, error: "Выберите время из доступных слотов." };
-    }
     if (isClosedDay(data.date)) {
       return { success: false, error: "Выбранный день отмечен как выходной" };
+    }
+    if (!isBookingTimeAllowed(data.time, data.date)) {
+      return { success: false, error: "Выберите время из доступных слотов." };
     }
 
     if (
@@ -962,7 +962,7 @@ function updateAdminBookingInternal(data) {
       ? String(data.time)
       : booking.time;
 
-  if (newTime !== booking.time && !isBookingTimeAllowed(newTime)) {
+  if ((newTime !== booking.time || newDate !== booking.date) && !isBookingTimeAllowed(newTime, newDate)) {
     return { success: false, error: "Выберите время из доступных слотов." };
   }
 
@@ -2244,35 +2244,67 @@ function pad2(number) {
 // ВЫХОДНЫЕ ДНИ (хранятся в Script Properties)
 // ============================================================
 function getScheduleSettings() {
-  const defaults = { slotCount: 9, startTime: "10:00", bookingDays: 20, weeklyDays: [] };
+  const defaultSlots = Array.from({ length: 9 }, function(_, index) { return String(10 + index).padStart(2, "0") + ":00"; });
+  const defaultWeek = Array.from({ length: 7 }, function(_, day) { return { day: day, slots: defaultSlots.slice() }; });
+  const defaults = { bookingDays: 20, weeklySchedule: defaultWeek };
   const raw = PropertiesService.getScriptProperties().getProperty("SCHEDULE_SETTINGS");
   if (!raw) return defaults;
   try {
     const saved = JSON.parse(raw) || {};
+    let weeklySchedule = defaultWeek;
+    if (Array.isArray(saved.weeklySchedule)) {
+      const byDay = new Map(saved.weeklySchedule.map(function(item) { return [Number(item.day), item]; }));
+      weeklySchedule = defaultWeek.map(function(defaultDay) {
+        const item = byDay.get(defaultDay.day) || defaultDay;
+        let slots;
+        if (Array.isArray(item.slots)) {
+          slots = item.slots.map(String).filter(function(time) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(time); });
+        } else {
+          const count = Math.max(0, Math.min(24, Number.isInteger(Number(item.slotCount)) ? Number(item.slotCount) : 9));
+          const startTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(item.startTime || "")) ? String(item.startTime) : "10:00";
+          const parts = startTime.split(":").map(Number);
+          const start = parts[0] * 60 + parts[1];
+          slots = Array.from({ length: count }, function(_, index) {
+            const minutes = start + index * 60;
+            return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+          }).filter(function(time) { return Number(time.slice(0, 2)) < 24; });
+        }
+        return {
+          day: defaultDay.day,
+          slots: Array.from(new Set(slots)).sort()
+        };
+      });
+    } else {
+      const weeklyDays = Array.isArray(saved.weeklyDays) ? saved.weeklyDays.map(Number) : [];
+      weeklySchedule = defaultWeek.map(function(day) {
+        return { day: day.day, slots: weeklyDays.indexOf(day.day) !== -1 ? [] : day.slots };
+      });
+    }
     return {
-      slotCount: Math.max(1, Math.min(24, parseInt(saved.slotCount, 10) || defaults.slotCount)),
-      startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(saved.startTime || "")) ? String(saved.startTime) : defaults.startTime,
       bookingDays: Math.max(1, Math.min(365, parseInt(saved.bookingDays, 10) || defaults.bookingDays)),
-      weeklyDays: Array.isArray(saved.weeklyDays) ? Array.from(new Set(saved.weeklyDays.map(Number).filter(function(day) { return Number.isInteger(day) && day >= 0 && day <= 6; }))).sort() : []
+      weeklySchedule: weeklySchedule
     };
   } catch (error) {
     return defaults;
   }
 }
 
-function getScheduleTimes(settings) {
+function getScheduleForDate(date, settings) {
+  const value = String(date || "");
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || !parts.every(Number.isFinite)) return null;
+  const day = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay();
   const config = settings || getScheduleSettings();
-  const parts = config.startTime.split(":").map(Number);
-  const start = parts[0] * 60 + parts[1];
-  const count = Math.max(1, Math.min(24, config.slotCount));
-  return Array.from({ length: count }, function(_, index) {
-    const minutes = start + index * 60;
-    return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
-  });
+  return config.weeklySchedule.find(function(item) { return item.day === day; }) || null;
 }
 
-function isBookingTimeAllowed(time) {
-  return getScheduleTimes().indexOf(String(time || "").slice(0, 5)) !== -1;
+function getScheduleTimes(date, settings) {
+  const config = getScheduleForDate(date, settings);
+  return config && Array.isArray(config.slots) ? config.slots.slice() : [];
+}
+
+function isBookingTimeAllowed(time, date) {
+  return getScheduleTimes(date).indexOf(String(time || "").slice(0, 5)) !== -1;
 }
 
 function getDateAfterDays(days) {
@@ -2288,22 +2320,24 @@ function isBookingDateAllowed(date) {
 
 function setScheduleSettings(input) {
   if (!input || typeof input !== "object") return { success: false, error: "Некорректные настройки расписания." };
-  const slotCount = Number(input.slotCount);
   const bookingDays = Number(input.bookingDays);
-  const startTime = String(input.startTime || "");
-  const weeklyDays = Array.isArray(input.weeklyDays) ? Array.from(new Set(input.weeklyDays.map(Number).filter(function(day) { return Number.isInteger(day) && day >= 0 && day <= 6; }))).sort() : [];
-  if (!Number.isInteger(slotCount) || slotCount < 1 || slotCount > 24) return { success: false, error: "Количество слотов должно быть от 1 до 24." };
   if (!Number.isInteger(bookingDays) || bookingDays < 1 || bookingDays > 365) return { success: false, error: "Период записи должен быть от 1 до 365 дней." };
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) return { success: false, error: "Укажите корректное время начала." };
-  const schedule = { slotCount: slotCount, startTime: startTime, bookingDays: bookingDays, weeklyDays: weeklyDays };
-  const times = getScheduleTimes(schedule);
-  if (Number(times[times.length - 1].slice(0, 2)) >= 24) return { success: false, error: "Слоты не должны выходить за пределы суток." };
+  if (!Array.isArray(input.weeklySchedule) || input.weeklySchedule.length !== 7) return { success: false, error: "Укажите расписание для каждого дня недели." };
+  const seenDays = {};
+  const weeklySchedule = input.weeklySchedule.map(function(item) {
+    const day = Number(item.day);
+    const slots = Array.isArray(item.slots) ? item.slots.map(String) : null;
+    if (!Number.isInteger(day) || day < 0 || day > 6 || seenDays[day]) throw new Error("Проверьте дни недели в расписании.");
+    seenDays[day] = true;
+    if (!slots || slots.length > 24 || slots.some(function(time) { return !/^([01]\d|2[0-3]):[0-5]\d$/.test(time); })) throw new Error("У каждого дня должно быть от 0 до 24 корректных времён слотов.");
+    if (new Set(slots).size !== slots.length) throw new Error("Время слотов в пределах одного дня не должно повторяться.");
+    return { day: day, slots: slots.sort() };
+  }).sort(function(a, b) { return a.day - b.day; });
+  const schedule = { bookingDays: bookingDays, weeklySchedule: weeklySchedule };
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
   const conflicts = getBookings(getSheet()).filter(function(booking) {
     if (booking.status === "Отменена" || String(booking.date || "") < today) return false;
-    const parts = String(booking.date || "").split("-").map(Number);
-    const weekday = parts.length === 3 ? new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay() : -1;
-    return weeklyDays.indexOf(weekday) !== -1 || !times.includes(String(booking.time || "").slice(0, 5));
+    return !getScheduleTimes(booking.date, schedule).includes(String(booking.time || "").slice(0, 5));
   });
   if (conflicts.length) {
     return { success: false, error: "Настройки конфликтуют с существующими записями: " + conflicts.slice(0, 5).map(function(booking) { return String(booking.date).split("-").reverse().join(".") + (booking.time ? " в " + booking.time : ""); }).join(", ") + ". Сначала перенесите или отмените запись." };
@@ -2326,10 +2360,8 @@ function getClosedDays() {
 function isClosedDay(date) {
   const value = String(date || "");
   if (getClosedDays().indexOf(value) !== -1) return true;
-  const parts = value.split("-").map(Number);
-  if (parts.length !== 3) return false;
-  const weekday = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])).getUTCDay();
-  return getScheduleSettings().weeklyDays.indexOf(weekday) !== -1;
+  const schedule = getScheduleForDate(value);
+  return !schedule || !Array.isArray(schedule.slots) || schedule.slots.length === 0;
 }
 
 function isPastBookingTime(date, time) {
