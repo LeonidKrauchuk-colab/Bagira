@@ -773,6 +773,22 @@
                   </div>
             </section>
       </main>
+      <button class="availability-toggle" id="availabilityToggle" type="button" aria-label="Ближайшие свободные записи"
+            aria-expanded="false" aria-controls="availabilityPanel" title="Ближайшие свободные записи">
+            <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
+            </svg>
+      </button>
+      <aside class="availability-panel" id="availabilityPanel" aria-labelledby="availabilityTitle" hidden>
+            <div class="availability-panel-header">
+                  <h2 id="availabilityTitle">Ближайшие свободные записи</h2>
+                  <button class="availability-close" id="availabilityClose" type="button"
+                        aria-label="Закрыть список">×</button>
+            </div>
+            <div class="availability-list" id="availabilityList" aria-live="polite">
+                  <p>Загружаем свободное время…</p>
+            </div>
+      </aside>
       <!-- Мобильная фиксированная кнопка записи -->
       <!-- ================= FOOTER ================= -->
       <footer class="footer">

@@ -625,6 +625,147 @@ async function loadBusyTimes() {
 
 
 // ==========================================================
+// БЛИЖАЙШИЕ СВОБОДНЫЕ ЗАПИСИ
+// ==========================================================
+
+const availabilityToggle = document.getElementById("availabilityToggle");
+const availabilityPanel = document.getElementById("availabilityPanel");
+const availabilityClose = document.getElementById("availabilityClose");
+const availabilityList = document.getElementById("availabilityList");
+
+function setAvailabilityPanelOpen(open) {
+  if (!availabilityPanel || !availabilityToggle) return;
+  availabilityPanel.hidden = !open;
+  availabilityToggle.setAttribute("aria-expanded", String(open));
+  if (open) loadNearestAvailability();
+}
+
+async function loadNearestAvailability() {
+  if (!availabilityList) return;
+  availabilityList.replaceChildren();
+  const loading = document.createElement("p");
+  loading.textContent = "Загружаем свободное время…";
+  availabilityList.appendChild(loading);
+
+  try {
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const todayResponse = await fetch(`${SCRIPT_URL}?date=${encodeURIComponent(localToday)}&t=${Date.now()}`);
+    if (!todayResponse.ok) throw new Error("Не удалось загрузить расписание.");
+    const todayResult = await todayResponse.json();
+    if (!todayResult.success) throw new Error(todayResult.error || "Не удалось загрузить расписание.");
+    if (todayResult.scheduleSettings) scheduleSettings = { ...scheduleSettings, ...todayResult.scheduleSettings };
+    closedDayDates = Array.isArray(todayResult.closedDays) ? todayResult.closedDays : closedDayDates;
+
+    const today = todayResult.today || localToday;
+    if (today !== localToday) {
+      const response = await fetch(`${SCRIPT_URL}?date=${encodeURIComponent(today)}&t=${Date.now()}`);
+      if (!response.ok) throw new Error("Не удалось загрузить расписание.");
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Не удалось загрузить расписание.");
+      Object.assign(todayResult, data);
+      closedDayDates = Array.isArray(data.closedDays) ? data.closedDays : closedDayDates;
+      if (data.scheduleSettings) scheduleSettings = { ...scheduleSettings, ...data.scheduleSettings };
+    }
+    const todayUtc = new Date(`${today}T00:00:00Z`);
+    const maxDays = Math.min(365, Math.max(1, Number(scheduleSettings.bookingDays) || 20));
+    const slots = [];
+
+    for (let offset = 0; offset <= maxDays && slots.length < 6; offset += 1) {
+      const date = new Date(todayUtc);
+      date.setUTCDate(date.getUTCDate() + offset);
+      const dateString = date.toISOString().slice(0, 10);
+      if (closedDayDates.includes(dateString)) continue;
+
+      const result = offset === 0
+        ? todayResult
+        : await (async () => {
+            const response = await fetch(`${SCRIPT_URL}?date=${encodeURIComponent(dateString)}&t=${Date.now()}`);
+            if (!response.ok) throw new Error("Не удалось загрузить свободное время.");
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || "Не удалось загрузить свободное время.");
+            if (data.scheduleSettings) scheduleSettings = { ...scheduleSettings, ...data.scheduleSettings };
+            if (Array.isArray(data.closedDays)) closedDayDates = data.closedDays;
+            return data;
+          })();
+
+      if (closedDayDates.includes(dateString)) continue;
+      const day = scheduleForDate(dateString);
+      const daySlots = day && Array.isArray(day.slots) ? day.slots : [];
+      const bookings = Array.isArray(result.bookings) ? result.bookings : [];
+      const currentTime = dateString === today ? (result.currentTime || "") : "";
+
+      for (const time of daySlots) {
+        if (dateString === today && time <= currentTime) continue;
+        const isBusy = bookings.some(booking =>
+          booking.date === dateString &&
+          String(booking.time || "").trim().substring(0, 5) === time &&
+          booking.status !== "Отменена"
+        );
+        if (!isBusy) slots.push({ date: dateString, time });
+        if (slots.length === 6) break;
+      }
+    }
+
+    availabilityList.replaceChildren();
+    if (!slots.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "Свободных окон пока нет.";
+      availabilityList.appendChild(empty);
+      return;
+    }
+
+    slots.forEach(slot => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "availability-slot";
+      const dateLabel = document.createElement("span");
+      dateLabel.textContent = formatDateForDisplay(slot.date);
+      const timeLabel = document.createElement("strong");
+      timeLabel.textContent = slot.time;
+      button.append(dateLabel, timeLabel);
+      button.addEventListener("click", async () => {
+        dateInput.value = slot.date;
+        renderTimeButtons(slot.date);
+        timeButtons.forEach(item => {
+          item.disabled = true;
+          item.classList.add("busy");
+        });
+        await loadBusyTimes();
+        const timeButton = timeButtons.find(item => item.dataset.time === slot.time);
+        if (!timeButton || timeButton.disabled) {
+          loadNearestAvailability();
+          return;
+        }
+        timeButtons.forEach(item => item.classList.remove("selected"));
+        timeButton.classList.add("selected");
+        selectedTimeInput.value = slot.time;
+        if (bookingSuccess) bookingSuccess.style.display = "none";
+        if (bookingForm) bookingForm.style.display = "";
+        setAvailabilityPanelOpen(false);
+        document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.setTimeout(() => nameInput?.focus({ preventScroll: true }), 450);
+      });
+      availabilityList.appendChild(button);
+    });
+  } catch (error) {
+    availabilityList.replaceChildren();
+    const message = document.createElement("p");
+    message.textContent = error.message || "Не удалось загрузить свободное время.";
+    availabilityList.appendChild(message);
+  }
+}
+
+availabilityToggle?.addEventListener("click", () => {
+  setAvailabilityPanelOpen(availabilityPanel.hidden);
+});
+availabilityClose?.addEventListener("click", () => setAvailabilityPanelOpen(false));
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && availabilityPanel && !availabilityPanel.hidden) setAvailabilityPanelOpen(false);
+});
+
+
+// ==========================================================
 // ИЗМЕНЕНИЕ ДАТЫ
 // ==========================================================
 
