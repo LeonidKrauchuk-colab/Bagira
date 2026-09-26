@@ -62,6 +62,10 @@ function doGet(e) {
   try {
 
     const sheet = getSheet();
+    const availabilityRequested = String(e && e.parameter && e.parameter.availability || "") === "1";
+    if (availabilityRequested) {
+      return jsonResponse(getNearestAvailability(sheet));
+    }
     const requestedDate = String(e && e.parameter && e.parameter.date || "");
     const bookings = requestedDate
       ? getBookings(sheet).filter(function(booking) {
@@ -93,6 +97,56 @@ function doGet(e) {
 
   }
 
+}
+
+
+
+// ============================================================
+// БЛИЖАЙШИЕ СВОБОДНЫЕ ОКНА
+// ============================================================
+
+function getNearestAvailability(sheet) {
+  const settings = getScheduleSettings();
+  const closedDays = getClosedDays();
+  const timezone = Session.getScriptTimeZone();
+  const now = new Date();
+  const today = Utilities.formatDate(now, timezone, "yyyy-MM-dd");
+  const currentTime = Utilities.formatDate(now, timezone, "HH:mm");
+  const maxDays = Math.min(365, Math.max(1, Number(settings.bookingDays) || 20));
+  const busySlots = {};
+
+  getBookings(sheet).forEach(function(booking) {
+    if (booking.status === "Отменена" || booking.date < today) return;
+    if (!busySlots[booking.date]) busySlots[booking.date] = {};
+    busySlots[booking.date][String(booking.time || "").slice(0, 5)] = true;
+  });
+
+  const slots = [];
+  const todayUtc = new Date(today + "T00:00:00Z");
+  for (let offset = 0; offset <= maxDays && slots.length < 6; offset += 1) {
+    const date = new Date(todayUtc);
+    date.setUTCDate(date.getUTCDate() + offset);
+    const dateString = date.toISOString().slice(0, 10);
+    if (closedDays.indexOf(dateString) !== -1) continue;
+
+    const schedule = getScheduleForDate(dateString, settings);
+    const times = schedule && Array.isArray(schedule.slots) ? schedule.slots : [];
+    for (let index = 0; index < times.length && slots.length < 6; index += 1) {
+      const time = String(times[index]).slice(0, 5);
+      if (dateString === today && time <= currentTime) continue;
+      if (busySlots[dateString] && busySlots[dateString][time]) continue;
+      slots.push({ date: dateString, time: time });
+    }
+  }
+
+  return {
+    success: true,
+    slots: slots,
+    closedDays: closedDays,
+    scheduleSettings: settings,
+    today: today,
+    currentTime: currentTime
+  };
 }
 
 
