@@ -8,7 +8,7 @@
 // ==========================================================
 
 const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbx5bk4gWQXRvXjFo8METowWbFTQYh_4AjuyW4TGqEBg7FCzL2WLGICpwerhu0iGvt-C/exec";
+  "https://script.google.com/macros/s/AKfycbyUmag3iZ0l0s50I72IHE0xyO4yiUXTWzEskDm1g2pXF_I1TTAD71AhGOQXIxykit5O/exec";
 
 
 // ==========================================================
@@ -456,7 +456,7 @@ function formatDateForDisplay(
 // ==========================================================
 
 if (timeList) {
-  timeList.addEventListener("click", function(event) {
+  timeList.addEventListener("click", function (event) {
     const button = event.target.closest(".time-button");
     if (!button || button.disabled) return;
     timeButtons.forEach(item => item.classList.remove("selected"));
@@ -799,7 +799,7 @@ setInterval(
   120000
 );
 
-document.addEventListener("visibilitychange", function() {
+document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "visible") loadBusyTimes();
 });
 
