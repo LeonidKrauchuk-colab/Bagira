@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-admin-v7";
+const CACHE_NAME = "bagira-admin-v8";
 
 const FILES_TO_CACHE = [
   "./admin.html",
@@ -42,7 +42,7 @@ self.addEventListener("activate", (event) => {
       return Promise.all(
 
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith("bagira-admin-") && name !== CACHE_NAME)
           .map((name) => caches.delete(name))
 
       );

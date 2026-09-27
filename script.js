@@ -482,9 +482,10 @@ async function loadBusyTimes() {
     }
 
 
+    const requestedDate = dateInput.value;
     const response =
       await fetch(
-        `${SCRIPT_URL}?date=${encodeURIComponent(dateInput.value)}&t=${Date.now()}`
+        `${SCRIPT_URL}?date=${encodeURIComponent(requestedDate)}&t=${Date.now()}`
       );
 
 
@@ -511,6 +512,8 @@ async function loadBusyTimes() {
 
     }
 
+
+    if (dateInput.value !== requestedDate) return;
 
     const bookings =
       Array.isArray(
@@ -1225,105 +1228,16 @@ if (bookingForm) {
 
       try {
 
-        await fetch(
-
-          SCRIPT_URL,
-
-          {
-
-            method:
-              "POST",
-
-            mode:
-              "no-cors",
-
-            headers: {
-
-              "Content-Type":
-                "text/plain;charset=utf-8"
-
-            },
-
-            body:
-              JSON.stringify(
-                booking
-              )
-
-          }
-
-        );
-
-
-        // Даём Apps Script время
-        // записать строку и отправить Telegram
-
-        await new Promise(
-          function (resolve) {
-
-            setTimeout(
-              resolve,
-              1000
-            );
-
-          }
-        );
-
-
-        // ==================================================
-        // ПРОВЕРЯЕМ, ПОЯВИЛАСЬ ЛИ ЗАПИСЬ
-        // ==================================================
-
-        const verifyResponse =
-          await fetch(
-            `${SCRIPT_URL}?date=${encodeURIComponent(booking.date)}&t=${Date.now()}`
-          );
-
-
-        if (
-          verifyResponse.ok
-        ) {
-
-          const verifyResult =
-            await verifyResponse.json();
-
-
-          if (
-            verifyResult.success &&
-            Array.isArray(
-              verifyResult.bookings
-            )
-          ) {
-
-            const saved =
-              verifyResult.bookings.some(
-                function (item) {
-
-                  return (
-
-                    item.date ===
-                    booking.date &&
-
-                    item.time ===
-                    booking.time
-
-                  );
-
-                }
-              );
-
-
-            if (!saved) {
-
-              console.warn(
-                "Запись пока не найдена в таблице"
-              );
-
-            }
-
-          }
-
+        const response = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(booking)
+        });
+        if (!response.ok) throw new Error("Ошибка отправки записи. Попробуйте ещё раз.");
+        const result = await response.json();
+        if (result.success !== true || !result.id) {
+          throw new Error(result.error || "Сервер не подтвердил создание записи.");
         }
-
 
         // ==================================================
         // ПОКАЗ УСПЕШНОГО СООБЩЕНИЯ
@@ -1402,7 +1316,7 @@ if (bookingForm) {
 
 
         showError(
-          "Не удалось отправить запись. Попробуйте ещё раз."
+          error.message || "Не удалось отправить запись. Попробуйте ещё раз."
         );
 
       }

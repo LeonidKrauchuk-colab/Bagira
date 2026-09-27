@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-static-v8";
+const CACHE_NAME = "bagira-static-v9";
 
 const APP_SHELL = [
   "./",
@@ -49,7 +49,7 @@ self.addEventListener("activate", (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((name) => name !== CACHE_NAME)
+            .filter((name) => name.startsWith("bagira-static-") && name !== CACHE_NAME)
             .map((name) => caches.delete(name))
         )
       )

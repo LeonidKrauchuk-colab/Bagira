@@ -174,18 +174,12 @@ function doPost(e) {
 
     // Telegram updates share this endpoint with the website API.
     if (data && data.callback_query) {
-      if (String(data.callback_query.data || "").indexOf("admin_") === 0) {
-        return jsonResponse(handleAdminTelegramCallback(data.callback_query, e));
-      }
       if (String(data.callback_query.data || "").indexOf("client_") === 0) {
         return jsonResponse(handleClientTelegramCallback(data.callback_query, e));
       }
       return jsonResponse(handleTelegramBookingCallback(data.callback_query, e));
     }
     if (data && data.message) {
-      if (isTelegramAdmin(data.message.from, data.message.chat)) {
-        return jsonResponse(handleAdminTelegramMessage(data.message, e));
-      }
       return jsonResponse(handleClientTelegramMessage(data.message, e));
     }
 // --------------------------------------------------------
@@ -528,7 +522,7 @@ function getBookings(sheet) {
 // СОЗДАНИЕ ЗАПИСИ С САЙТА
 // ============================================================
 
-function createBooking(data) {
+function createBooking(data, clientChatId) {
 
   const lock =
     LockService.getScriptLock();
@@ -704,10 +698,10 @@ function createBooking(data) {
         row
       ]);
 
-    if (data.clientChatId) {
+    if (clientChatId) {
       PropertiesService.getScriptProperties().setProperty(
         "BOOKING_CLIENT_CHAT_" + id,
-        String(data.clientChatId)
+        String(clientChatId)
       );
     }
 
@@ -788,7 +782,7 @@ function createBooking(data) {
 
   } finally {
 
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
 
   }
 
@@ -947,7 +941,7 @@ function addAdminBooking(data) {
 
   } finally {
 
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
 
   }
 
@@ -1012,6 +1006,10 @@ function updateAdminBooking(data) {
 // ============================================================
 
 function updateAdminBookingInternal(data) {
+  return withBookingLock(function() { return updateAdminBookingInternalLocked(data); });
+}
+
+function updateAdminBookingInternalLocked(data) {
 
   const sheet =
     getSheet();
@@ -1233,6 +1231,10 @@ function updateAdminBookingInternal(data) {
 // ============================================================
 
 function cancelAdminBooking(id) {
+  return withBookingLock(function() { return cancelAdminBookingLocked(id); });
+}
+
+function cancelAdminBookingLocked(id) {
 
   if (!id) {
 
@@ -1298,6 +1300,10 @@ function cancelAdminBooking(id) {
 // ============================================================
 
 function deleteAdminBooking(id) {
+  return withBookingLock(function() { return deleteAdminBookingLocked(id); });
+}
+
+function deleteAdminBookingLocked(id) {
 
   if (!id) {
 
@@ -1887,7 +1893,7 @@ function handleTelegramBookingCallback(callback, event) {
       applied = true;
     }
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 
   const finalOutcome = booking.status === "Отменена" ? "cancel" : "confirm";
@@ -2151,9 +2157,8 @@ function createClientTelegramBooking(chatId, user, state, phone) {
     service: state.service,
     date: state.date,
     time: state.time,
-    comment: "Запись через Telegram",
-    clientChatId: chatId
-  });
+    comment: "Запись через Telegram"
+  }, chatId);
   if (!result.success) {
     clearClientBotState(chatId);
     sendClientBotMessage(chatId, "Не удалось создать запись: " + escapeTelegram(result.error || "попробуйте ещё раз.") + "\n\nВыберите новое время.");
@@ -2651,7 +2656,8 @@ function getScheduleTimes(date, settings) {
 }
 
 function isBookingTimeAllowed(time, date) {
-  return getScheduleTimes(date).indexOf(String(time || "").slice(0, 5)) !== -1;
+  return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
+    && isValidBookingDate(date) && getScheduleTimes(date).indexOf(time) !== -1;
 }
 
 function getDateAfterDays(days) {
@@ -2659,13 +2665,23 @@ function getDateAfterDays(days) {
   return new Date(Date.UTC(today[0], today[1] - 1, today[2] + days)).toISOString().slice(0, 10);
 }
 
+function isValidBookingDate(date) {
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(date + "T00:00:00Z");
+  return !isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+}
+
 function isBookingDateAllowed(date) {
   const value = String(date || "");
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= today && value <= getDateAfterDays(getScheduleSettings().bookingDays);
+  return isValidBookingDate(value) && value >= today && value <= getDateAfterDays(getScheduleSettings().bookingDays);
 }
 
 function setScheduleSettings(input) {
+  return withBookingLock(function() { return setScheduleSettingsLocked(input); });
+}
+
+function setScheduleSettingsLocked(input) {
   if (!input || typeof input !== "object") return { success: false, error: "Некорректные настройки расписания." };
   const bookingDays = Number(input.bookingDays);
   if (!Number.isInteger(bookingDays) || bookingDays < 1 || bookingDays > 365) return { success: false, error: "Период записи должен быть от 1 до 365 дней." };
@@ -2743,6 +2759,17 @@ function setClosedDays(dates) {
     PropertiesService.getScriptProperties().setProperty("CLOSED_DAYS", JSON.stringify(normalized));
     return { success: true, closedDays: normalized };
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
+  }
+}
+
+// All read/check/write operations use the same lock, including row deletion.
+function withBookingLock(operation) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return operation();
+  } finally {
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 }
