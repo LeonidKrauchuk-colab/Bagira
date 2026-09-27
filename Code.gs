@@ -23,6 +23,9 @@
 
 const SHEET_NAME = "Записи";
 
+// Адрес рабочего развёртывания: общий для сайта, админки и Telegram.
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbz7YOsw9YSwHQNqO9MVr0DrLiabp9JSwzVSNidAToAVGnNvi-IAR66Cyx0SexrIjKVZ/exec";
+
 const TELEGRAM_BOT_TOKEN_PROPERTY =
   "TELEGRAM_BOT_TOKEN";
 const TELEGRAM_WEBHOOK_SECRET_PROPERTY = "TELEGRAM_WEBHOOK_SECRET";
@@ -52,6 +55,8 @@ const ADMIN_TELEGRAM_USER_ID_PROPERTY =
   "ADMIN_TELEGRAM_USER_ID";
 
 const MASTER_TELEGRAM_USER_ID_PROPERTY = "MASTER_TELEGRAM_USER_ID";
+// Временно отключено. Для возврата сообщений мастеру установите true.
+const MASTER_TELEGRAM_NOTIFICATIONS_ENABLED = false;
 
 // ============================================================
 // GET
@@ -1798,6 +1803,15 @@ function formatBookingTelegramMessage(booking, outcome) {
 }
 
 function telegramApiCall(method, payload) {
+  // Администратор продолжает получать сообщения, даже если оба ID совпадают.
+  if (!MASTER_TELEGRAM_NOTIFICATIONS_ENABLED && payload && payload.chat_id != null) {
+    const properties = PropertiesService.getScriptProperties();
+    const masterId = String(properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY) || "");
+    const adminId = String(properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY) || "");
+    if (masterId && masterId !== adminId && String(payload.chat_id) === masterId) {
+      return null;
+    }
+  }
   const token = PropertiesService.getScriptProperties().getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN не найден");
 
@@ -1822,8 +1836,7 @@ function sendNewBookingTelegram(booking) {
   const properties = PropertiesService.getScriptProperties();
   const adminChatId = properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY);
   const masterChatId = properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY);
-  if (!adminChatId) throw new Error("ADMIN_TELEGRAM_USER_ID не найден");
-  if (!masterChatId) throw new Error("MASTER_TELEGRAM_USER_ID не найден");
+  if (!adminChatId && !masterChatId) throw new Error("Не заданы получатели уведомлений Telegram");
 
   const keyboard = {
     inline_keyboard: [[
@@ -1836,20 +1849,39 @@ function sendNewBookingTelegram(booking) {
     { chatId: adminChatId, column: 11 },
     { chatId: masterChatId, column: 12 }
   ];
+  const failures = [];
   targets.forEach(function(target) {
-    const sent = telegramApiCall("sendMessage", {
-      chat_id: target.chatId,
-      text: message,
-      parse_mode: "HTML",
-      reply_markup: keyboard
-    });
-    if (booking.rowNumber && sent && sent.message_id) {
-      getSheet().getRange(booking.rowNumber, target.column).setValue(String(sent.message_id));
+    if (!target.chatId) return;
+    try {
+      const sent = telegramApiCall("sendMessage", {
+        chat_id: target.chatId,
+        text: message,
+        parse_mode: "HTML",
+        reply_markup: keyboard
+      });
+      if (booking.rowNumber && sent && sent.message_id) {
+        getSheet().getRange(booking.rowNumber, target.column).setValue(String(sent.message_id));
+      }
+    } catch (error) {
+      // Failure for one recipient must not prevent delivery to the other.
+      failures.push("column " + target.column + ": " + error.message);
     }
   });
+  if (failures.length) throw new Error(failures.join("; "));
+
 }
 
 function handleTelegramBookingCallback(callback, event) {
+  try {
+    return processTelegramBookingCallback(callback, event);
+  } catch (error) {
+    console.error("Ошибка обработки кнопки записи: " + error.message);
+    answerTelegramCallback(callback.id, "Не удалось обработать запись. Проверьте её статус в админ-панели и повторите попытку.", true);
+    return { success: false, error: "Booking callback failed" };
+  }
+}
+
+function processTelegramBookingCallback(callback, event) {
   const properties = PropertiesService.getScriptProperties();
   const secret = properties.getProperty(TELEGRAM_WEBHOOK_SECRET_PROPERTY);
   const suppliedSecret = event && event.parameter ? event.parameter.telegramSecret : "";
@@ -1897,11 +1929,12 @@ function handleTelegramBookingCallback(callback, event) {
   }
 
   const finalOutcome = booking.status === "Отменена" ? "cancel" : "confirm";
-  editTelegramBookingMessages(booking, callback.message, finalOutcome);
-  if (applied) sendClientBookingStatus(booking, finalOutcome);
+  // Answer the button immediately after saving, before other Telegram requests.
   answerTelegramCallback(callback.id, applied
     ? (finalOutcome === "cancel" ? "Заказ отменен" : "Заказ подтвержден")
     : "Заказ уже обработан");
+  editTelegramBookingMessages(booking, callback.message, finalOutcome);
+  if (applied) sendClientBookingStatus(booking, finalOutcome);
   return { success: true, applied: applied, status: booking.status };
 }
 
@@ -1950,7 +1983,7 @@ function answerTelegramCallback(callbackId, text, showAlert) {
 function installTelegramBookingWebhook() {
   const properties = PropertiesService.getScriptProperties();
   const token = properties.getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
-  const deploymentUrl = ScriptApp.getService().getUrl();
+  const deploymentUrl = WEB_APP_URL;
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN не найден");
   if (!deploymentUrl) throw new Error("Сначала разверните проект как веб-приложение");
 
@@ -1964,6 +1997,75 @@ function installTelegramBookingWebhook() {
   installClientBookingRemindersTrigger();
   configureClientBotProfile();
   return { success: true, message: "Webhook, профиль бота и напоминания для клиентов установлены." };
+}
+
+// Запустите вручную: проверка доставки кнопок без отправки сообщений.
+// URL webhook содержит секрет и намеренно не выводится в журнал.
+function diagnoseTelegramBookingWebhook() {
+  const info = telegramApiCall("getWebhookInfo", {});
+  const properties = PropertiesService.getScriptProperties();
+  const deploymentUrl = WEB_APP_URL;
+  const secret = properties.getProperty(TELEGRAM_WEBHOOK_SECRET_PROPERTY);
+  const expectedUrl = deploymentUrl && secret
+    ? deploymentUrl + "?telegramSecret=" + encodeURIComponent(secret) : "";
+  // Telegram's delivery error is needed to distinguish access and server failures.
+  // Redact URLs and credentials before writing it to the execution log.
+  let deliveryError = String(info.last_error_message || "");
+  [secret, properties.getProperty(TELEGRAM_BOT_TOKEN_PROPERTY)].filter(Boolean).forEach(function(value) {
+    deliveryError = deliveryError.split(String(value)).join("[скрыто]");
+  });
+  deliveryError = deliveryError.replace(/https?:\/\/[^\s]+/gi, "[URL скрыт]");
+  const report = {
+    webhookConfigured: Boolean(info.url),
+    webhookMatchesCurrentDeployment: Boolean(expectedUrl && info.url === expectedUrl),
+    callbacksEnabled: !info.allowed_updates || info.allowed_updates.includes("callback_query"),
+    pendingUpdateCount: info.pending_update_count || 0,
+    lastDeliveryErrorAt: info.last_error_date || null,
+    hasDeliveryError: Boolean(info.last_error_message),
+    lastDeliveryError: deliveryError || null,
+    adminConfigured: Boolean(properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY)),
+    masterNotificationsEnabled: MASTER_TELEGRAM_NOTIFICATIONS_ENABLED
+  };
+  console.log(JSON.stringify(report));
+  return report;
+}
+
+// Проверяет анонимный POST именно на зарегистрированный адрес webhook.
+// Не создаёт записи и не отправляет сообщения; URL и тела ответов не журналируются.
+function diagnoseTelegramWebhookPost() {
+  const info = telegramApiCall("getWebhookInfo", {});
+  if (!/^https:\/\/script\.google\.com\//.test(String(info.url || ""))) {
+    throw new Error("Webhook не указывает на script.google.com");
+  }
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify({ action: "diagnoseWebhookTransport" }),
+    muteHttpExceptions: true,
+    followRedirects: false
+  };
+  const first = UrlFetchApp.fetch(info.url, options);
+  const headers = first.getAllHeaders();
+  const locationKey = Object.keys(headers).find(function(key) { return key.toLowerCase() === "location"; });
+  const location = locationKey ? String(headers[locationKey]) : "";
+  const report = {
+    firstHttpStatus: first.getResponseCode(),
+    redirectHost: (location.match(/^https:\/\/([^/]+)/i) || [])[1] || null,
+    finalHttpStatus: first.getResponseCode(),
+    reachedDoPost: false
+  };
+  const finalResponse = location
+    ? UrlFetchApp.fetch(info.url, Object.assign({}, options, { followRedirects: true }))
+    : first;
+  report.finalHttpStatus = finalResponse.getResponseCode();
+  try {
+    const result = JSON.parse(finalResponse.getContentText());
+    report.reachedDoPost = result.success === false && result.error === "Неизвестная команда";
+  } catch (error) {
+    // HTML access errors are not logged: they may contain private URLs.
+  }
+  console.log(JSON.stringify(report));
+  return report;
 }
 
 // ============================================================

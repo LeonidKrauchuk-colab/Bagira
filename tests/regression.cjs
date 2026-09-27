@@ -46,6 +46,27 @@ for (const [name,arg] of [['updateAdminBookingInternal',{}],['cancelAdminBooking
   assert.equal(locked, false);
 }
 assert.equal(flushed, 8);
+// A failed or missing administrator recipient must not block the master.
+const properties = {ADMIN_TELEGRAM_USER_ID:'admin', MASTER_TELEGRAM_USER_ID:'master'};
+const notificationContext = vm.createContext({
+  console,
+  PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties[key]})}
+});
+vm.runInContext(source, notificationContext);
+let deliveries = [];
+notificationContext.telegramApiCall = (method, payload) => {
+  deliveries.push(payload.chat_id);
+  if (payload.chat_id === 'admin') throw new Error('chat unavailable');
+  return {message_id:1};
+};
+const notificationBooking = {id:'test',name:'Client',phone:'123',service:'Service',date:'2026-09-28',time:'10:00'};
+assert.throws(()=>notificationContext.sendNewBookingTelegram(notificationBooking), /chat unavailable/);
+assert.deepEqual(deliveries,['admin','master']);
+delete properties.ADMIN_TELEGRAM_USER_ID;
+deliveries = [];
+notificationContext.sendNewBookingTelegram(notificationBooking);
+assert.deepEqual(deliveries,['master']);
+
 // Execute the actual submission code with mocked responses; only confirmed IDs pass.
 const frontend = fs.readFileSync('script.js','utf8');
 const begin = frontend.indexOf('        const response = await fetch(SCRIPT_URL,');
