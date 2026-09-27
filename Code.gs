@@ -174,12 +174,18 @@ function doPost(e) {
 
     // Telegram updates share this endpoint with the website API.
     if (data && data.callback_query) {
+      if (String(data.callback_query.data || "").indexOf("admin_") === 0) {
+        return jsonResponse(handleAdminTelegramCallback(data.callback_query, e));
+      }
       if (String(data.callback_query.data || "").indexOf("client_") === 0) {
         return jsonResponse(handleClientTelegramCallback(data.callback_query, e));
       }
       return jsonResponse(handleTelegramBookingCallback(data.callback_query, e));
     }
     if (data && data.message) {
+      if (isTelegramAdmin(data.message.from, data.message.chat)) {
+        return jsonResponse(handleAdminTelegramMessage(data.message, e));
+      }
       return jsonResponse(handleClientTelegramMessage(data.message, e));
     }
 // --------------------------------------------------------
