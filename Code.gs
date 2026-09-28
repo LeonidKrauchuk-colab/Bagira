@@ -31,25 +31,8 @@ const TELEGRAM_BOT_TOKEN_PROPERTY =
 const TELEGRAM_WEBHOOK_SECRET_PROPERTY = "TELEGRAM_WEBHOOK_SECRET";
 
 // ============================================================
-// GOOGLE АВТОРИЗАЦИЯ АДМИН-ПАНЕЛИ
+// TELEGRAM АВТОРИЗАЦИЯ АДМИН-ПАНЕЛИ
 // ============================================================
-
-const GOOGLE_CLIENT_ID =
-  "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
-
-
-// Разрешённые Google-аккаунты.
-// У обоих аккаунтов будут ОДИНАКОВЫЕ права.
-
-const ALLOWED_ADMIN_EMAILS = [
-
-  // Владелец
-  "leon12439@gmail.com",
-
-  // ПРИМЕР — сюда позже впишем Gmail мастера
-  "limkamilajaja@gmail.com"
-
-];
 
 const ADMIN_TELEGRAM_USER_ID_PROPERTY =
   "ADMIN_TELEGRAM_USER_ID";
@@ -65,6 +48,10 @@ const MASTER_TELEGRAM_NOTIFICATIONS_ENABLED = false;
 function doGet(e) {
 
   try {
+
+    if (e && e.parameter && e.parameter.authConfig === "1") {
+      return jsonResponse(getTelegramLoginConfig());
+    }
 
     const sheet = getSheet();
     const availabilityRequested = String(e && e.parameter && e.parameter.availability || "") === "1";
@@ -177,15 +164,12 @@ function doPost(e) {
     const data =
       JSON.parse(e.postData.contents || "{}");
 
-    // Telegram updates share this endpoint with the website API.
-    if (data && data.callback_query) {
-      if (String(data.callback_query.data || "").indexOf("client_") === 0) {
-        return jsonResponse(handleClientTelegramCallback(data.callback_query, e));
-      }
-      return jsonResponse(handleTelegramBookingCallback(data.callback_query, e));
-    }
-    if (data && data.message) {
-      return jsonResponse(handleClientTelegramMessage(data.message, e));
+    if (data.action === "telegramAdminLogin") return jsonResponse(loginTelegramAdmin(data.telegramAuth));
+    if (data.action === "logoutAdmin") return jsonResponse(logoutTelegramAdmin(data.sessionToken));
+
+    // ContentService redirects JSON responses; Telegram needs a direct acknowledgement.
+    if (data && (data.callback_query || data.message || data.action === "diagnoseWebhookTransport")) {
+      return handleTelegramWebhook(data, e);
     }
 // --------------------------------------------------------
 // ПРОВЕРКА ДОСТУПА АДМИНИСТРАТОРА
@@ -196,8 +180,8 @@ if (
 ) {
 
   const allowed =
-    checkGoogleAdminAccess(
-      data.idToken
+    checkTelegramAdminAccess(
+      data.sessionToken
     );
 
   return jsonResponse({
@@ -206,7 +190,7 @@ if (
 
     error: allowed
       ? ""
-      : "Этот Google-аккаунт не имеет доступа к админ-панели."
+      : "Сессия истекла или доступ запрещён. Войдите через Telegram."
 
   });
 
@@ -216,15 +200,15 @@ if (
     // НАСТРОЙКА ВЫХОДНЫХ ДНЕЙ
     // --------------------------------------------------------
     if (data.action === "setClosedDays") {
-      if (!checkGoogleAdminAccess(data.idToken)) {
-        return jsonResponse({ success: false, error: "Доступ запрещён" });
+      if (!checkTelegramAdminAccess(data.sessionToken)) {
+        return jsonResponse({ success: false, code: "AUTH_REQUIRED", error: "Сессия истекла или доступ запрещён. Войдите через Telegram." });
       }
       return jsonResponse(setClosedDays(data.dates));
     }
 
     if (data.action === "setScheduleSettings") {
-      if (!checkGoogleAdminAccess(data.idToken)) {
-        return jsonResponse({ success: false, error: "Доступ запрещён" });
+      if (!checkTelegramAdminAccess(data.sessionToken)) {
+        return jsonResponse({ success: false, code: "AUTH_REQUIRED", error: "Сессия истекла или доступ запрещён. Войдите через Telegram." });
       }
       return jsonResponse(setScheduleSettings(data.settings));
     }
@@ -240,11 +224,11 @@ if (
       data.action === "deleteAdminBooking"
     ) {
 
-      if (!checkGoogleAdminAccess(data.idToken)) {
+      if (!checkTelegramAdminAccess(data.sessionToken)) {
 
         return jsonResponse({
           success: false,
-          error: "Доступ запрещён"
+          code: "AUTH_REQUIRED", error: "Сессия истекла или доступ запрещён. Войдите через Telegram."
         });
 
       }
@@ -303,11 +287,11 @@ if (
   data.action === "getAdminBookings"
 ) {
 
-  if (!checkGoogleAdminAccess(data.idToken)) {
+  if (!checkTelegramAdminAccess(data.sessionToken)) {
 
     return jsonResponse({
       success: false,
-      error: "Доступ запрещён"
+      code: "AUTH_REQUIRED", error: "Сессия истекла или доступ запрещён. Войдите через Telegram."
     });
 
   }
@@ -377,6 +361,35 @@ if (
 // ============================================================
 // JSON RESPONSE
 // ============================================================
+
+function telegramWebhookResponse(result) {
+  return HtmlService.createHtmlOutput(result && result.success === false ? "ERROR" : "OK");
+}
+
+function handleTelegramWebhook(data, event) {
+  if (!checkTelegramWebhookAccess(event)) {
+    return telegramWebhookResponse({ success: false });
+  }
+  try {
+    let result = { success: true };
+    if (data.callback_query) {
+      const callback = data.callback_query;
+      const action = String(callback.data || "");
+      result = action.indexOf("admin_") === 0
+        ? handleStaffTelegramCallback(callback, event)
+        : action.indexOf("client_") === 0
+          ? handleClientTelegramCallback(callback, event)
+          : handleTelegramBookingCallback(callback, event);
+    } else if (data.message) {
+      result = dispatchTelegramMessage(data.message, event);
+    }
+    if (result && result.success === false) console.error("Telegram update handler failed: " + String(result.error || "Unknown error"));
+    return telegramWebhookResponse(result);
+  } catch (error) {
+    console.error("Telegram webhook handler failed: " + error.message);
+    return telegramWebhookResponse({ success: false });
+  }
+}
 
 function jsonResponse(data) {
 
@@ -1550,179 +1563,100 @@ function isTimeBusy(
 // ============================================================
 
 // ============================================================
-// ПРОВЕРКА GOOGLE ID TOKEN
+// TELEGRAM LOGIN И СЕССИИ АДМИНИСТРАТОРА
 // ============================================================
 
-function checkGoogleAdminAccess(idToken) {
-
-  try {
-
-    // Нет токена
-    if (!idToken) {
-
-      console.error(
-        "Google ID token отсутствует"
-      );
-
-      return false;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Проверяем токен через Google
-    // --------------------------------------------------------
-
-    const url =
-      "https://oauth2.googleapis.com/tokeninfo?id_token=" +
-      encodeURIComponent(idToken);
-
-
-    const response =
-      UrlFetchApp.fetch(
-        url,
-        {
-          method: "get",
-          muteHttpExceptions: true
-        }
-      );
-
-
-    if (
-      response.getResponseCode() !== 200
-    ) {
-
-      console.error(
-        "Google tokeninfo error: " +
-        response.getContentText()
-      );
-
-      return false;
-
-    }
-
-
-    const tokenInfo =
-      JSON.parse(
-        response.getContentText()
-      );
-
-
-    // --------------------------------------------------------
-    // Проверяем Client ID
-    // --------------------------------------------------------
-
-    if (
-      String(tokenInfo.aud || "") !==
-      String(GOOGLE_CLIENT_ID)
-    ) {
-
-      console.error(
-        "Неверный Google Client ID"
-      );
-
-      return false;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Проверяем email
-    // --------------------------------------------------------
-
-    const email =
-      String(
-        tokenInfo.email || ""
-      )
-        .trim()
-        .toLowerCase();
-
-
-    if (!email) {
-
-      console.error(
-        "Google email отсутствует"
-      );
-
-      return false;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Проверяем подтверждение email
-    // --------------------------------------------------------
-
-    if (
-      String(
-        tokenInfo.email_verified || ""
-      ).toLowerCase() !== "true"
-    ) {
-
-      console.error(
-        "Google email не подтверждён"
-      );
-
-      return false;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Проверяем разрешённый список
-    // --------------------------------------------------------
-
-    const allowedEmails =
-      ALLOWED_ADMIN_EMAILS.map(
-        function(item) {
-
-          return String(item)
-            .trim()
-            .toLowerCase();
-
-        }
-      );
-
-
-    if (
-      allowedEmails.indexOf(email) === -1
-    ) {
-
-      console.error(
-        "Доступ запрещён для: " +
-        email
-      );
-
-      return false;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Всё хорошо
-    // --------------------------------------------------------
-
-    console.log(
-      "Google admin access granted: " +
-      email
-    );
-
-    return true;
-
-
-  } catch (error) {
-
-    console.error(
-      "Ошибка проверки Google ID token: " +
-      error.message
-    );
-
-    return false;
-
-  }
-
+// Проверка Telegram Login Widget: подпись проверяется только на сервере.
+function telegramAuthHex(bytes) {
+  return bytes.map(function(byte) { return ((byte + 256) % 256).toString(16).padStart(2, "0"); }).join("");
 }
 
+function telegramAuthEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return difference === 0;
+}
+
+function isAllowedTelegramAdminId(id) {
+  const properties = PropertiesService.getScriptProperties();
+  return [ADMIN_TELEGRAM_USER_ID_PROPERTY, MASTER_TELEGRAM_USER_ID_PROPERTY].some(function(key) {
+    const allowed = String(properties.getProperty(key) || "").trim();
+    return allowed && allowed === String(id);
+  });
+}
+
+function getTelegramLoginConfig() {
+  const cache = CacheService.getScriptCache();
+  let username = cache.get("ADMIN_LOGIN_BOT_USERNAME");
+  if (!username) {
+    const bot = telegramApiCall("getMe", {});
+    username = String(bot.username || "");
+    if (!/^[A-Za-z0-9_]{5,32}$/.test(username)) throw new Error("Не удалось определить имя бота");
+    cache.put("ADMIN_LOGIN_BOT_USERNAME", username, 300);
+  }
+  return { success: true, botUsername: username };
+}
+
+function telegramSessionKey(token) {
+  return "ADMIN_SESSION_" + telegramAuthHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token, Utilities.Charset.UTF_8));
+}
+
+function loginTelegramAdmin(auth) {
+  const denied = { success: false, error: "Вход не подтверждён. Используйте Telegram-аккаунт администратора или мастера." };
+  if (!auth || typeof auth !== "object" || Array.isArray(auth)) return denied;
+  const fields = ["id", "first_name", "last_name", "username", "photo_url", "auth_date", "hash"];
+  const keys = Object.keys(auth);
+  if (keys.some(function(key) { return fields.indexOf(key) === -1 || !["string", "number"].includes(typeof auth[key]); })) return denied;
+  if (!/^\d{1,20}$/.test(String(auth.id || "")) || !/^[a-f0-9]{64}$/.test(String(auth.hash || ""))) return denied;
+  const now = Math.floor(Date.now() / 1000);
+  const authDate = Number(auth.auth_date);
+  if (!Number.isInteger(authDate) || authDate > now + 30 || now - authDate > 300) return denied;
+  if (!isAllowedTelegramAdminId(auth.id)) return denied;
+  const token = PropertiesService.getScriptProperties().getProperty(TELEGRAM_BOT_TOKEN_PROPERTY);
+  if (!token) return denied;
+  const checkString = keys.filter(function(key) { return key !== "hash"; }).sort().map(function(key) {
+    return key + "=" + String(auth[key]);
+  }).join("\n");
+  if (checkString.length > 4096) return denied;
+  const secret = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token, Utilities.Charset.UTF_8);
+  const expected = telegramAuthHex(Utilities.computeHmacSha256Signature(Utilities.newBlob(checkString).getBytes(), secret));
+  if (!telegramAuthEqual(expected, auth.hash)) return denied;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const cache = CacheService.getScriptCache();
+    const usedKey = "ADMIN_LOGIN_USED_" + auth.hash;
+    if (cache.get(usedKey)) return { success: false, error: "Этот вход уже использован. Войдите через Telegram ещё раз." };
+    const sessionToken = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
+    const expiresAt = Date.now() + 6 * 60 * 60 * 1000;
+    cache.put(telegramSessionKey(sessionToken), JSON.stringify({ id: String(auth.id), expiresAt: expiresAt }), 21600);
+    cache.put(usedKey, "1", 360);
+    return { success: true, sessionToken: sessionToken, expiresAt: expiresAt };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function checkTelegramAdminAccess(sessionToken) {
+  if (typeof sessionToken !== "string" || !/^[a-f0-9]{64}$/.test(sessionToken)) return false;
+  try {
+    const raw = CacheService.getScriptCache().get(telegramSessionKey(sessionToken));
+    if (!raw) return false;
+    const session = JSON.parse(raw);
+    return Number(session.expiresAt) > Date.now() && isAllowedTelegramAdminId(session.id);
+  } catch (error) {
+    return false;
+  }
+}
+
+function logoutTelegramAdmin(sessionToken) {
+  if (typeof sessionToken === "string" && /^[a-f0-9]{64}$/.test(sessionToken)) {
+    CacheService.getScriptCache().remove(telegramSessionKey(sessionToken));
+  }
+  return { success: true };
+}
 
 
 // ============================================================
@@ -1802,9 +1736,9 @@ function formatBookingTelegramMessage(booking, outcome) {
     "📝 <b>Комментарий:</b> " + escapeTelegram(booking.comment || "—");
 }
 
-function telegramApiCall(method, payload) {
+function telegramApiCall(method, payload, allowMasterReply) {
   // Администратор продолжает получать сообщения, даже если оба ID совпадают.
-  if (!MASTER_TELEGRAM_NOTIFICATIONS_ENABLED && payload && payload.chat_id != null) {
+  if (!MASTER_TELEGRAM_NOTIFICATIONS_ENABLED && !allowMasterReply && payload && payload.chat_id != null) {
     const properties = PropertiesService.getScriptProperties();
     const masterId = String(properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY) || "");
     const adminId = String(properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY) || "");
@@ -1959,7 +1893,7 @@ function editTelegramBookingMessages(booking, pressedMessage, outcome) {
         text: formatBookingTelegramMessage(booking, outcome),
         parse_mode: "HTML",
         reply_markup: { inline_keyboard: [] }
-      });
+      }, item.chatId === pressedChatId && String(item.messageId) === pressedMessageId);
     } catch (error) {
       console.error("Не удалось обновить сообщение Telegram: " + error.message);
     }
@@ -2018,7 +1952,8 @@ function diagnoseTelegramBookingWebhook() {
   const report = {
     webhookConfigured: Boolean(info.url),
     webhookMatchesCurrentDeployment: Boolean(expectedUrl && info.url === expectedUrl),
-    callbacksEnabled: !info.allowed_updates || info.allowed_updates.includes("callback_query"),
+    callbacksEnabled: !info.allowed_updates || info.allowed_updates.length === 0 || info.allowed_updates.includes("callback_query"),
+    messagesEnabled: !info.allowed_updates || info.allowed_updates.length === 0 || info.allowed_updates.includes("message"),
     pendingUpdateCount: info.pending_update_count || 0,
     lastDeliveryErrorAt: info.last_error_date || null,
     hasDeliveryError: Boolean(info.last_error_message),
@@ -2059,8 +1994,21 @@ function diagnoseTelegramWebhookPost() {
     : first;
   report.finalHttpStatus = finalResponse.getResponseCode();
   try {
-    const result = JSON.parse(finalResponse.getContentText());
-    report.reachedDoPost = result.success === false && result.error === "Неизвестная команда";
+    const body = finalResponse.getContentText();
+    // Distinguish an old deployed JSON handler from the new HTML acknowledgement.
+    report.responseKind = /\bOK\b/.test(body) ? "html_acknowledgement" : "unrecognized";
+    report.reachedDoPost = report.finalHttpStatus === 200 && report.responseKind === "html_acknowledgement";
+    try {
+      const result = JSON.parse(body);
+      if (result.success === false && result.error === "Неизвестная команда") {
+        report.responseKind = "old_deployment_json";
+        report.reachedDoPost = true;
+      } else {
+        report.responseKind = "json_response";
+      }
+    } catch (parseError) {
+      // HTML response: keep the classification above without exposing its contents.
+    }
   } catch (error) {
     // HTML access errors are not logged: they may contain private URLs.
   }
@@ -2112,7 +2060,126 @@ function sendClientBotMessage(chatId, text, options) {
   return telegramApiCall("sendMessage", payload);
 }
 
+function dispatchTelegramMessage(message, event) {
+  if (!checkTelegramWebhookAccess(event)) return { success: false, error: "Webhook access denied" };
+  if (!message.chat || message.chat.type !== "private") return { success: true };
+  try {
+    return isTelegramStaff(message.from, message.chat)
+      ? handleStaffTelegramMessage(message, event)
+      : handleClientTelegramMessage(message, event);
+  } catch (error) {
+    console.error("Telegram menu handler failed: " + error.message);
+    try {
+      telegramApiCall("sendMessage", {
+        chat_id: String(message.chat.id),
+        text: "Не удалось выполнить команду. Попробуйте ещё раз. Если ошибка повторится, сообщите администратору."
+      }, true);
+    } catch (replyError) {
+      console.error("Telegram menu error reply failed: " + replyError.message);
+    }
+    return { success: false, error: "Telegram menu handler failed" };
+  }
+}
+
+// Рабочее меню доступно только разрешённым пользователям в личном чате.
+function isTelegramStaff(user, chat) {
+  if (!user || !chat || chat.type !== "private" || String(user.id) !== String(chat.id)) return false;
+  const properties = PropertiesService.getScriptProperties();
+  return [ADMIN_TELEGRAM_USER_ID_PROPERTY, MASTER_TELEGRAM_USER_ID_PROPERTY].some(function(key) {
+    const id = properties.getProperty(key);
+    return Boolean(id) && String(id) === String(user.id);
+  });
+}
+
+function sendStaffTelegramMessage(chatId, text, markup) {
+  // Ответ на запрос мастера разрешён даже при отключённых автоуведомлениях.
+  return telegramApiCall("sendMessage", {
+    chat_id: String(chatId), text: text, parse_mode: "HTML",
+    reply_markup: markup || {
+      keyboard: [["📅 Сегодня", "📅 Завтра"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна"]],
+      resize_keyboard: true
+    }
+  }, true);
+}
+
+function staffBotMenu(chatId) {
+  clearClientBotState(chatId);
+  refreshTelegramChatCommands(chatId);
+  return sendStaffTelegramMessage(chatId, "<b>Рабочее меню</b>\nВыберите записи для просмотра или свободные окна.");
+}
+
+function handleStaffTelegramMessage(message, event) {
+  if (!checkTelegramWebhookAccess(event) || !isTelegramStaff(message.from, message.chat)) {
+    return { success: false, error: "Access denied" };
+  }
+  const chatId = String(message.chat.id);
+  const text = String(message.text || "").trim();
+  const actions = { "📅 Сегодня": "today", "/today": "today", "📅 Завтра": "tomorrow", "/tomorrow": "tomorrow", "⏳ Ожидают подтверждения": "pending", "/pending": "pending" };
+  if (actions[text]) {
+    sendStaffBookings(chatId, actions[text], 0);
+  } else if (text === "🕐 Свободные окна" || text === "/slots") {
+    const slots = getNearestAvailability(getSheet()).slots;
+    sendStaffTelegramMessage(chatId, slots.length
+      ? "<b>Свободные окна</b>\n\n" + slots.map(function(slot) {
+          return escapeTelegram(formatDateForTelegram(slot.date) + " — " + slot.time);
+        }).join("\n")
+      : "Свободных окон в периоде записи нет.");
+  } else {
+    staffBotMenu(chatId);
+  }
+  return { success: true };
+}
+
+function handleStaffTelegramCallback(callback, event) {
+  if (!checkTelegramWebhookAccess(event) || !isTelegramStaff(callback.from, callback.message && callback.message.chat)) {
+    answerTelegramCallback(callback.id, "Доступ запрещён", true);
+    return { success: false, error: "Access denied" };
+  }
+  const match = String(callback.data || "").match(/^admin_list:(today|tomorrow|pending):(\d{1,6})$/);
+  if (!match) {
+    answerTelegramCallback(callback.id, "Неизвестное действие", true);
+    return { success: false, error: "Invalid callback data" };
+  }
+  answerTelegramCallback(callback.id, "Загружаю записи…");
+  sendStaffBookings(String(callback.message.chat.id), match[1], Number(match[2]));
+  return { success: true };
+}
+
+function sendStaffBookings(chatId, mode, offset) {
+  const today = getDateAfterDays(0);
+  const targetDate = mode === "tomorrow" ? getDateAfterDays(1) : today;
+  const bookings = getBookings(getSheet()).filter(function(booking) {
+    if (booking.status === "Отменена") return false;
+    return mode === "pending"
+      ? booking.status === "Ожидает подтверждения" && booking.date >= today
+      : booking.date === targetDate;
+  }).sort(function(a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
+  const titles = { today: "Записи на сегодня", tomorrow: "Записи на завтра", pending: "Ожидают подтверждения" };
+  const page = bookings.slice(offset, offset + 5);
+  sendStaffTelegramMessage(chatId, "<b>" + titles[mode] + "</b> — " + bookings.length +
+    (page.length ? "\nПоказаны " + (offset + 1) + "–" + (offset + page.length) : "\nЗаписей нет."));
+  page.forEach(function(booking) {
+    // Ограничиваем поля карточки, чтобы длинный комментарий не сорвал весь список.
+    const text = "📅 " + escapeTelegram(booking.date + " " + booking.time) +
+      "\n👤 " + escapeTelegram(String(booking.name).slice(0, 100)) +
+      "\n📞 " + escapeTelegram(String(booking.phone).slice(0, 50)) +
+      "\n💅 " + escapeTelegram(String(booking.service).slice(0, 150)) +
+      "\nСтатус: " + escapeTelegram(booking.status);
+    const markup = booking.status === "Ожидает подтверждения" ? { inline_keyboard: [[
+      { text: "Подтвердить", callback_data: "booking_confirm:" + booking.id },
+      { text: "Отменить", callback_data: "booking_cancel:" + booking.id }
+    ]] } : undefined;
+    sendStaffTelegramMessage(chatId, text, markup);
+  });
+  if (offset + page.length < bookings.length) {
+    sendStaffTelegramMessage(chatId, "Продолжить просмотр:", { inline_keyboard: [[{
+      text: "Следующие записи →", callback_data: "admin_list:" + mode + ":" + (offset + 5)
+    }]] });
+  }
+}
+
 function clientBotMenu(chatId, text) {
+  refreshTelegramChatCommands(chatId);
   return sendClientBotMessage(chatId, text || "Выберите действие:", {
     reply_markup: {
       keyboard: [["📝 Записаться"], ["🕐 Ближайшие окна", "📋 Мои записи"]],
@@ -2147,11 +2214,11 @@ function handleClientTelegramMessage(message, event) {
     clientBotMenu(chatId, "Здравствуйте! Я помогу выбрать свободное время и отправлю статус вашей записи.");
     return { success: true };
   }
-  if (text === "📝 Записаться" || text === "🕐 Ближайшие окна") {
+  if (text === "📝 Записаться" || text === "🕐 Ближайшие окна" || text === "/book" || text === "/slots") {
     sendClientNearestSlots(chatId, text === "📝 Записаться" ? "Выберите удобное время:" : "Ближайшие свободные окна:");
     return { success: true };
   }
-  if (text === "📋 Мои записи") {
+  if (text === "📋 Мои записи" || text === "/bookings") {
     sendClientBookings(chatId);
     return { success: true };
   }
@@ -2185,6 +2252,11 @@ function handleClientTelegramCallback(callback, event) {
   if (!checkTelegramWebhookAccess(event)) {
     answerTelegramCallback(callback.id, "Не удалось проверить запрос.", true);
     return { success: false, error: "Webhook access denied" };
+  }
+  if (isTelegramStaff(callback.from, callback.message && callback.message.chat)) {
+    answerTelegramCallback(callback.id, "Открываю рабочее меню");
+    staffBotMenu(String(callback.message.chat.id));
+    return { success: true };
   }
   const chatId = String(callback.message && callback.message.chat && callback.message.chat.id || "");
   const data = String(callback.data || "");
@@ -2336,6 +2408,46 @@ function installClientBookingRemindersTrigger() {
     .create();
 }
 
+function clearTelegramMenuCommands(scope) {
+  // Удаляем список команд, включая языковые варианты старого меню.
+  ["", "ru", "en"].forEach(function(language) {
+    telegramApiCall("deleteMyCommands", { scope: scope, language_code: language });
+  });
+}
+
+function refreshTelegramChatCommands(chatId) {
+  try {
+    clearTelegramMenuCommands({ type: "chat", chat_id: String(chatId) });
+    telegramApiCall("setChatMenuButton", {
+      chat_id: String(chatId), menu_button: { type: "default" }
+    }, true);
+  } catch (error) {
+    console.error("Не удалось обновить команды меню: " + error.message);
+  }
+}
+
+// Запустить вручную после обновления развёртывания. Сообщения не рассылает.
+function configureTelegramMenus() {
+  clearTelegramMenuCommands({ type: "default" });
+  clearTelegramMenuCommands({ type: "all_private_chats" });
+  telegramApiCall("setChatMenuButton", { menu_button: { type: "default" } });
+  const properties = PropertiesService.getScriptProperties();
+  const staffIds = Array.from(new Set([
+    properties.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY),
+    properties.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY)
+  ].filter(Boolean)));
+  const saved = properties.getProperties();
+  const clientIds = Object.keys(saved).reduce(function(ids, key) {
+    if (key.indexOf(CLIENT_BOT_STATE_PREFIX) === 0) ids.push(key.slice(CLIENT_BOT_STATE_PREFIX.length));
+    if (key.indexOf(BOOKING_CLIENT_CHAT_PREFIX) === 0) ids.push(saved[key]);
+    return ids;
+  }, []);
+  Array.from(new Set(staffIds.concat(clientIds))).filter(Boolean).forEach(function(chatId) {
+    refreshTelegramChatCommands(chatId);
+  });
+  return { success: true };
+}
+
 function configureClientBotProfile() {
   telegramApiCall("setMyDescription", {
     description: "Онлайн-запись в мастерскую «Багира». Отправьте /start, чтобы выбрать свободное время, услугу и получить уведомления о записи."
@@ -2343,12 +2455,7 @@ function configureClientBotProfile() {
   telegramApiCall("setMyShortDescription", {
     short_description: "Для начала записи отправьте /start."
   });
-  telegramApiCall("setMyCommands", {
-    commands: [
-      { command: "start", description: "Начать запись" },
-      { command: "menu", description: "Открыть меню" }
-    ]
-  });
+  configureTelegramMenus();
 }
 
 // ============================================================

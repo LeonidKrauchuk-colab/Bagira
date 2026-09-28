@@ -11,6 +11,7 @@ for (const match of fs.readFileSync('admin/admin.html', 'utf8').matchAll(/<scrip
 let locked = false, flushed = 0;
 const context = vm.createContext({
   console,
+  PropertiesService: {getScriptProperties:()=>({getProperty:()=>null})},
   SpreadsheetApp: { flush() { flushed++; } },
   LockService: { getScriptLock() { return {
     waitLock() { assert.equal(locked, false); locked = true; },
@@ -20,6 +21,7 @@ const context = vm.createContext({
 vm.runInContext(source, context);
 vm.runInContext(`
 jsonResponse = value => value;
+telegramWebhookResponse = value => value;
 getScheduleSettings = () => ({weeklySchedule: Array.from({length:7}, (_,day) => ({day, slots:['10:00']}))});
 checkTelegramWebhookAccess = event => event.parameter?.telegramSecret === 'valid';
 getClientBotState = () => ({});
@@ -83,7 +85,7 @@ async function submit(result) {
   assert.equal(await submit({success:true,id:'booking-id'}), true);
   for (const [file, current, obsolete] of [
     ['service-worker.js','bagira-static-v9','bagira-static-v8'],
-    ['admin/service-worker.js','bagira-admin-v8','bagira-admin-v7']
+    ['admin/service-worker.js','bagira-admin-v9','bagira-admin-v8']
   ]) {
     const events = {}, deleted = [];
     const other = current.startsWith('bagira-admin') ? 'bagira-static-v9' : 'bagira-admin-v8';

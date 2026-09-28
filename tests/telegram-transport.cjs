@@ -1,0 +1,18 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const ctx=vm.createContext({console:{error(){}},HtmlService:{createHtmlOutput:body=>({type:'html',body})}});
+vm.runInContext(fs.readFileSync('Code.gs','utf8'),ctx);
+ctx.checkTelegramWebhookAccess=()=>true;
+ctx.jsonResponse=data=>({type:'json',data});
+ctx.dispatchTelegramMessage=()=>({success:true});
+const post=data=>ctx.doPost({postData:{contents:JSON.stringify(data)}});
+assert.equal(post({message:{}}).type,'html');
+assert.equal(post({action:'diagnoseWebhookTransport'}).body,'OK');
+assert.equal(post({action:'unknown'}).type,'json');
+ctx.dispatchTelegramMessage=()=>{throw Error('failure');};
+assert.equal(post({message:{}}).type,'html');
+ctx.checkTelegramWebhookAccess=()=>false;
+let called=false;
+ctx.dispatchTelegramMessage=()=>{called=true;};
+assert.equal(post({message:{}}).body,'ERROR');
+assert.equal(called,false);
+console.log('Transport passed: Telegram uses HtmlService, website keeps JSON, invalid requests do not dispatch.');

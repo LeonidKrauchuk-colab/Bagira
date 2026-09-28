@@ -12,7 +12,7 @@
   <title>Админ-панель — Багира</title>
 
   <!-- Google Identity Services: вход через Google -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
 
 
   <style>
@@ -587,14 +587,14 @@
     }
 
     /* =========================
-       GOOGLE АВТОРИЗАЦИЯ
+       TELEGRAM АВТОРИЗАЦИЯ
     ========================= */
 
     #adminApp {
       display: none;
     }
 
-    .google-login {
+    .telegram-login {
       min-height: 100vh;
       display: flex;
       align-items: center;
@@ -602,7 +602,7 @@
       padding: 20px;
     }
 
-    .google-login-card {
+    .telegram-login-card {
       width: 100%;
       max-width: 420px;
       background: white;
@@ -612,17 +612,17 @@
       box-shadow: 0 10px 35px rgba(0, 0, 0, .10);
     }
 
-    .google-login-card h2 {
+    .telegram-login-card h2 {
       margin-top: 0;
       color: #67405a;
     }
 
-    .google-login-card p {
+    .telegram-login-card p {
       color: #777;
       line-height: 1.5;
     }
 
-    #googleLoginButton {
+    #telegramLoginButton {
       display: flex;
       justify-content: center;
       margin-top: 22px;
@@ -743,14 +743,15 @@
 
   <!-- =====================================================
        ВХОД АДМИНИСТРАТОРА
-       Доступ имеют только два Google-аккаунта, указанные
+       Доступ имеют только Telegram ID администратора и мастера, указанные
        в Apps Script. Оба аккаунта получают одинаковые права.
   ====================================================== -->
-  <div id="googleLogin" class="google-login">
-    <div class="google-login-card">
+  <div id="telegramLogin" class="telegram-login">
+    <div class="telegram-login-card">
       <h2>🔐 БАГИРА</h2>
-      <p>Для входа в админ-панель используйте разрешённый Google-аккаунт.</p>
-      <div id="googleLoginButton"></div>
+      <p>Войдите через Telegram с аккаунта администратора или мастера.</p>
+      <div id="telegramLoginButton" aria-live="polite">Загрузка входа Telegram…</div>
+      <button type="button" id="retryTelegramLogin" hidden>Повторить загрузку</button>
       <div id="loginError"></div>
     </div>
   </div>
@@ -762,6 +763,7 @@
       <h1>
         🖥 Админ-панель «Багира»
       </h1>
+      <button type="button" id="logoutButton" class="logout-button">Выйти</button>
 
 
       <!-- =========================
@@ -1067,15 +1069,9 @@
     const GOOGLE_SCRIPT_URL =
       "https://script.google.com/macros/s/AKfycbz7YOsw9YSwHQNqO9MVr0DrLiabp9JSwzVSNidAToAVGnNvi-IAR66Cyx0SexrIjKVZ/exec";
 
-    const GOOGLE_CLIENT_ID =
-      "632682836962-e4oni5b7nv5glg536qaufa53794omca3.apps.googleusercontent.com";
-    /* =====================================================
-       GOOGLE АВТОРИЗАЦИЯ
-    ===================================================== */
-
-    // ID-токен Google хранится только в памяти текущей страницы.
-    // Повторный вход выполняется автоматически через Google Identity Services.
-    let GOOGLE_ID_TOKEN = "";
+    // Сессия хранится только в памяти страницы, без localStorage и URL.
+    let ADMIN_SESSION_TOKEN = "";
+    let adminSessionTimer = null;
 
     const closedDayInput = document.getElementById("closedDayInput");
     const addClosedDayButton = document.getElementById("addClosedDayButton");
@@ -1224,6 +1220,10 @@
       try {
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?settings=1&t=${Date.now()}`);
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
         if (!result.success) throw new Error(result.error || "Не удалось загрузить настройки расписания");
         closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];
         if (result.scheduleSettings) {
@@ -1262,9 +1262,13 @@
         const response = await fetch(GOOGLE_SCRIPT_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "setScheduleSettings", settings, idToken: GOOGLE_ID_TOKEN })
+          body: JSON.stringify({ action: "setScheduleSettings", settings, sessionToken: ADMIN_SESSION_TOKEN })
         });
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
         if (!result.success) throw new Error(result.error || "Не удалось сохранить расписание");
         scheduleSettings = result.scheduleSettings;
         renderWeeklySchedule(scheduleSettings.weeklySchedule);
@@ -1286,9 +1290,13 @@
         const response = await fetch(GOOGLE_SCRIPT_URL, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "setClosedDays", dates, idToken: GOOGLE_ID_TOKEN })
+          body: JSON.stringify({ action: "setClosedDays", dates, sessionToken: ADMIN_SESSION_TOKEN })
         });
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
         if (!result.success) throw new Error(result.error || "Не удалось сохранить выходные");
         closedDays = result.closedDays || dates;
         renderClosedDays();
@@ -1665,7 +1673,8 @@
     ===================================================== */
 
     async function loadBookings() {
-
+      const requestToken = ADMIN_SESSION_TOKEN;
+      if (!requestToken) return;
       updateWorkTimesForSelectedDate();
 
       hideError();
@@ -1687,7 +1696,7 @@
             },
             body: JSON.stringify({
               action: "getAdminBookings",
-              idToken: GOOGLE_ID_TOKEN
+              sessionToken: ADMIN_SESSION_TOKEN
             })
           }
         );
@@ -1697,6 +1706,10 @@
         }
 
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
 
         if (
           !result ||
@@ -1710,6 +1723,7 @@
           );
         }
 
+        if (ADMIN_SESSION_TOKEN !== requestToken) return;
         const bookings = result.bookings;
 
         const date = selectedDate.value;
@@ -2191,7 +2205,7 @@
           telegram: telegram,
           service: service,
           comment: comment,
-          idToken: GOOGLE_ID_TOKEN
+          sessionToken: ADMIN_SESSION_TOKEN
         };
         if (editingBookingId) {
           payload.action = "updateAdminBooking";
@@ -2216,6 +2230,10 @@
         }
 
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
 
         console.log("Ответ сохранения:", result);
 
@@ -2293,7 +2311,7 @@
             body: JSON.stringify({
               action: "deleteAdminBooking",
               id: id,
-              idToken: GOOGLE_ID_TOKEN
+              sessionToken: ADMIN_SESSION_TOKEN
             })
           }
         );
@@ -2303,6 +2321,10 @@
         }
 
         const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
 
         if (result.success === false) {
           throw new Error(
@@ -2547,7 +2569,7 @@
 
     });
     /* =====================================================
-       GOOGLE LOGIN
+       TELEGRAM LOGIN
     ===================================================== */
 
     function showLoginError(message) {
@@ -2561,117 +2583,88 @@
     }
 
 
-    function handleGoogleCredential(response) {
-
-      if (!response || !response.credential) {
-        showLoginError("Google не вернул данные авторизации.");
-        return;
-      }
-
-      GOOGLE_ID_TOKEN = response.credential;
-
-      verifyAdminAccess();
-
+    function closeAdminSession(message) {
+      ADMIN_SESSION_TOKEN = "";
+      clearTimeout(adminSessionTimer);
+      document.getElementById("adminApp").style.display = "none";
+      document.getElementById("telegramLogin").style.display = "flex";
+      bookingsContainer.replaceChildren();
+      closeBookingModal();
+      if (message) showLoginError(message);
     }
 
-    // Callback должен быть глобальным, поэтому делаем его window-функцией.
-    window.handleGoogleCredential = handleGoogleCredential;
-
-
-    async function verifyAdminAccess() {
-
+    window.handleTelegramCredential = async function (telegramAuth) {
+      document.getElementById("loginError").style.display = "none";
       try {
-
-        const response = await fetch(
-          GOOGLE_SCRIPT_URL,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "text/plain;charset=utf-8"
-            },
-            body: JSON.stringify({
-              action: "checkAdminAccess",
-              idToken: GOOGLE_ID_TOKEN
-            })
-          }
-        );
-
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "telegramAdminLogin", telegramAuth })
+        });
+        if (!response.ok) throw new Error("Не удалось связаться с сервером.");
         const result = await response.json();
-
-        if (!result.success) {
-          GOOGLE_ID_TOKEN = "";
-          showLoginError(
-            result.error ||
-            "Этот Google-аккаунт не имеет доступа к админ-панели."
-          );
-          return;
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
         }
-
-        document.getElementById("googleLogin").style.display = "none";
+        if (!result.success || !result.sessionToken) throw new Error(result.error || "Доступ запрещён.");
+        ADMIN_SESSION_TOKEN = result.sessionToken;
+        clearTimeout(adminSessionTimer);
+        adminSessionTimer = setTimeout(() => closeAdminSession("Сессия истекла. Войдите ещё раз."), Math.max(0, result.expiresAt - Date.now()));
+        document.getElementById("telegramLogin").style.display = "none";
         document.getElementById("adminApp").style.display = "block";
-
         setToday();
         await loadClosedDays();
         await loadBookings();
-
       } catch (error) {
-
-        console.error(error);
-        GOOGLE_ID_TOKEN = "";
-        showLoginError(
-          "Не удалось проверить Google-аккаунт. Проверьте URL Apps Script."
-        );
-
+        closeAdminSession(error.message || "Не удалось войти через Telegram.");
       }
+    };
 
+    async function initTelegramLogin() {
+      const container = document.getElementById("telegramLoginButton");
+      const retry = document.getElementById("retryTelegramLogin");
+      retry.hidden = true;
+      container.textContent = "Загрузка входа Telegram…";
+      try {
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?authConfig=1`);
+        const result = await response.json();
+        if (result.code === "AUTH_REQUIRED") {
+          closeAdminSession("Сессия истекла. Войдите через Telegram ещё раз.");
+          throw new Error("Требуется вход через Telegram.");
+        }
+        if (!response.ok || !result.success || !/^[A-Za-z0-9_]{5,32}$/.test(result.botUsername || "")) {
+          throw new Error("Не удалось загрузить вход Telegram. Проверьте обновление сервера.");
+        }
+        container.replaceChildren();
+        const script = document.createElement("script");
+        script.src = "https://telegram.org/js/telegram-widget.js?22";
+        script.async = true;
+        script.setAttribute("data-telegram-login", result.botUsername);
+        script.setAttribute("data-size", "large");
+        script.setAttribute("data-lang", "ru");
+        script.setAttribute("data-onauth", "handleTelegramCredential(user)");
+        script.onerror = () => { showLoginError("Не удалось загрузить Telegram. Попробуйте ещё раз."); retry.hidden = false; };
+        container.appendChild(script);
+      } catch (error) {
+        container.textContent = "";
+        showLoginError(error.message);
+        retry.hidden = false;
+      }
     }
 
-
-    function initGoogleLogin() {
-
-      if (!window.google || !google.accounts || !google.accounts.id) {
-        setTimeout(initGoogleLogin, 300);
-        return;
-      }
-
-      google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-        // Если этот Google-аккаунт уже был подтверждён ранее,
-        // Google постарается войти автоматически без повторного выбора аккаунта.
-        auto_select: true,
-        cancel_on_tap_outside: false
-      });
-
-      google.accounts.id.renderButton(
-        document.getElementById("googleLoginButton"),
-        {
-          type: "standard",
-          theme: "outline",
-          size: "large",
-          text: "signin_with",
-          shape: "rectangular",
-          width: 280
-        }
-      );
-
-      // Пытаемся выполнить тихий автоматический вход.
-      // Если Google не может войти автоматически, обычная кнопка
-      // остаётся доступной для ручного входа.
-      google.accounts.id.prompt(function (notification) {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          console.log("Автоматический вход Google недоступен — используйте кнопку входа.");
-        }
-      });
-
-    }
-
-
-    /* =====================================================
-       ЗАПУСК
-    ===================================================== */
-
-    initGoogleLogin();
+    document.getElementById("retryTelegramLogin").addEventListener("click", initTelegramLogin);
+    document.getElementById("logoutButton").addEventListener("click", async () => {
+      const token = ADMIN_SESSION_TOKEN;
+      closeAdminSession();
+      try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+          method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "logoutAdmin", sessionToken: token })
+        });
+      } catch (error) { showLoginError("Вы вышли на этом устройстве. Серверная сессия завершится по сроку действия."); }
+    });
+    initTelegramLogin();
 
 
   </script>
