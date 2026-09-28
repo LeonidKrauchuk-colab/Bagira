@@ -1722,6 +1722,8 @@ function installDailyBookingsSummaryTrigger() {
 function formatBookingTelegramMessage(booking, outcome) {
   const heading = outcome === "confirm"
     ? "✅ <b>Заказ подтвержден</b>\n\n"
+    : outcome === "move"
+      ? "📅 <b>Запись перенесена</b>\n\n"
     : outcome === "cancel"
       ? "❌ <b>Заказ отменен</b>\n\n"
       : "🔔 <b>НОВАЯ ЗАПИСЬ</b>\n\n";
@@ -1843,6 +1845,11 @@ function processTelegramBookingCallback(callback, event) {
 
   const outcome = match[1];
   const bookingId = match[2];
+  if (outcome === "cancel") {
+    answerTelegramCallback(callback.id, "Подтвердите отмену");
+    requestStaffCancellation(chatId, bookingId);
+    return {success:true};
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let booking;
@@ -1892,7 +1899,7 @@ function editTelegramBookingMessages(booking, pressedMessage, outcome) {
         message_id: Number(item.messageId),
         text: formatBookingTelegramMessage(booking, outcome),
         parse_mode: "HTML",
-        reply_markup: { inline_keyboard: [] }
+        reply_markup: staffBookingButtons(booking)
       }, item.chatId === pressedChatId && String(item.messageId) === pressedMessageId);
     } catch (error) {
       console.error("Не удалось обновить сообщение Telegram: " + error.message);
@@ -2096,7 +2103,7 @@ function sendStaffTelegramMessage(chatId, text, markup) {
   return telegramApiCall("sendMessage", {
     chat_id: String(chatId), text: text, parse_mode: "HTML",
     reply_markup: markup || {
-      keyboard: [["📅 Сегодня", "📅 Завтра"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна"]],
+      keyboard: [["📅 Сегодня", "📅 Завтра"], ["🗓 Выбрать дату"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна"]],
       resize_keyboard: true
     }
   }, true);
@@ -2117,6 +2124,8 @@ function handleStaffTelegramMessage(message, event) {
   const actions = { "📅 Сегодня": "today", "/today": "today", "📅 Завтра": "tomorrow", "/tomorrow": "tomorrow", "⏳ Ожидают подтверждения": "pending", "/pending": "pending" };
   if (actions[text]) {
     sendStaffBookings(chatId, actions[text], 0);
+  } else if (text === "🗓 Выбрать дату") {
+    sendStaffCalendar(chatId, getDateAfterDays(0).slice(0, 7));
   } else if (text === "🕐 Свободные окна" || text === "/slots") {
     const slots = getNearestAvailability(getSheet()).slots;
     sendStaffTelegramMessage(chatId, slots.length
@@ -2130,24 +2139,242 @@ function handleStaffTelegramMessage(message, event) {
   return { success: true };
 }
 
+// Календарь и действия сотрудников. Одноразовые кнопки привязаны к чату на 30 минут.
+function staffDateLabel(date) { return String(date).split("-").reverse().join("."); }
+function staffDateShift(date, days) {
+  const value = new Date(date + "T00:00:00Z");
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+function staffBookingRevision(booking) {
+  return JSON.stringify([booking.date, booking.time, booking.status]);
+}
+function staffActionState(chatId, token) {
+  if (!/^[a-f0-9]{16}$/.test(token)) return null;
+  const raw = CacheService.getScriptCache().get("STAFF_ACTION_" + token);
+  if (!raw) return null;
+  const state = JSON.parse(raw);
+  return state.chatId === String(chatId) && state.expiresAt > Date.now() ? state : null;
+}
+function saveStaffAction(token, state) {
+  CacheService.getScriptCache().put("STAFF_ACTION_" + token, JSON.stringify(state), 1800);
+}
+function startStaffAction(chatId, id, kind) {
+  const booking = findBookingById(id);
+  if (!booking || !["Активна", "Ожидает подтверждения"].includes(booking.status)) {
+    sendStaffTelegramMessage(chatId, "Запись не найдена или уже отменена. Обновите список.");
+    return null;
+  }
+  const token = Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+  const state = { chatId: String(chatId), id: id, kind: kind, revision: staffBookingRevision(booking), expiresAt: Date.now() + 1800000 };
+  saveStaffAction(token, state);
+  return { token: token, booking: booking };
+}
+function staffBookingButtons(booking) {
+  if (!["Активна", "Ожидает подтверждения"].includes(booking.status)) return { inline_keyboard: [] };
+  const rows = [];
+  if (booking.status === "Ожидает подтверждения") rows.push([{ text: "Подтвердить", callback_data: "booking_confirm:" + booking.id }]);
+  rows.push([
+    { text: "Перенести", callback_data: "admin_move:" + booking.id },
+    { text: "Отменить запись", callback_data: "admin_cancel:" + booking.id }
+  ]);
+  return { inline_keyboard: rows };
+}
+function sendStaffCalendar(chatId, month, token) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !isValidBookingDate(month + "-01")) throw new Error("Некорректный месяц");
+  const first = month + "-01";
+  const next = new Date(first + "T00:00:00Z");
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const nextMonth = next.toISOString().slice(0, 7);
+  const previous = new Date(first + "T00:00:00Z");
+  previous.setUTCMonth(previous.getUTCMonth() - 1);
+  const prevMonth = previous.toISOString().slice(0, 7);
+  const calendarPrefix = token ? "admin_mc:" + token + ":" : "admin_cal:";
+  const rows = [[{ text: "‹", callback_data: calendarPrefix + prevMonth },
+    { text: month.split("-").reverse().join("."), callback_data: "admin_noop" },
+    { text: "›", callback_data: calendarPrefix + nextMonth }]];
+  rows.push(["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(function(day) { return { text: day, callback_data: "admin_noop" }; }));
+  let week = Array.from({length: (new Date(first + "T00:00:00Z").getUTCDay() + 6) % 7}, function() { return {text:"·",callback_data:"admin_noop"}; });
+  const state = token ? staffActionState(chatId, token) : null;
+  if (token && (!state || state.kind !== "move")) return sendStaffTelegramMessage(chatId, "Кнопка устарела. Откройте запись заново.");
+  const bookings = token ? getBookings(getSheet()) : [];
+  for (let date = first; date < nextMonth + "-01"; date = staffDateShift(date, 1)) {
+    const available = !token || staffFreeTimes(date, state.id, bookings).length > 0;
+    week.push({ text: available ? String(Number(date.slice(8))) : "·", callback_data: available
+      ? (token ? "admin_md:" + token + ":" + date : "admin_date:" + date + ":0") : "admin_noop" });
+    if (week.length === 7) { rows.push(week); week = []; }
+  }
+  if (week.length) rows.push(week);
+  rows.push([{ text:"Главное меню", callback_data:"admin_home" }]);
+  sendStaffTelegramMessage(chatId, token ? "Выберите новую дату. Дни без свободного времени отмечены точкой." : "Выберите дату для просмотра записей:", {inline_keyboard:rows});
+}
+function staffFreeTimes(date, excludeId, bookings) {
+  if (!isValidBookingDate(date) || !isBookingDateAllowed(date) || isClosedDay(date)) return [];
+  return getScheduleTimes(date).filter(function(time) {
+    return !isPastBookingTime(date, time) && !bookings.some(function(booking) {
+      return booking.id !== excludeId && booking.status !== "Отменена" && booking.date === date && booking.time === time;
+    });
+  });
+}
+function requestStaffCancellation(chatId, id) {
+  const action = startStaffAction(chatId, id, "cancel");
+  if (!action) return;
+  sendStaffTelegramMessage(chatId, "<b>Отменить запись?</b>\n" + escapeTelegram(String(action.booking.name).slice(0,100)) +
+    "\n" + staffDateLabel(action.booking.date) + " в " + escapeTelegram(action.booking.time), {inline_keyboard:[
+      [{text:"Да, отменить запись", callback_data:"admin_cok:" + action.token}],
+      [{text:"Нет, оставить запись", callback_data:"admin_abort:" + action.token}]
+    ]});
+}
+function applyStaffAction(chatId, token, kind) {
+  return withBookingLock(function() {
+    const state = staffActionState(chatId, token);
+    if (!state || state.kind !== kind) return {success:false, error:"Действие уже выполнено или кнопка устарела. Обновите список."};
+    const booking = findBookingById(state.id);
+    if (!booking || staffBookingRevision(booking) !== state.revision) return {success:false, error:"Запись уже изменена. Откройте её заново."};
+    const previous = {date:booking.date, time:booking.time};
+    if (kind === "move") {
+      if (!state.date || !state.time || !staffFreeTimes(state.date, booking.id, getBookings(getSheet())).includes(state.time)) {
+        return {success:false, error:"Время уже занято или недоступно. Выберите новое время."};
+      }
+      if (booking.date === state.date && booking.time === state.time) return {success:false, error:"Выбрано текущее время записи."};
+      getSheet().getRange(booking.rowNumber, 6, 1, 2).setValues([[state.date, state.time]]);
+      booking.date = state.date; booking.time = state.time;
+      PropertiesService.getScriptProperties().deleteProperty(BOOKING_REMINDER_PREFIX + booking.id);
+    } else {
+      getSheet().getRange(booking.rowNumber, 9).setValue("Отменена");
+      booking.status = "Отменена";
+    }
+    CacheService.getScriptCache().remove("STAFF_ACTION_" + token);
+    return {success:true, booking:booking, previous:previous};
+  });
+}
+function finishStaffAction(callback, token, kind) {
+  const chatId = String(callback.message.chat.id);
+  const result = applyStaffAction(chatId, token, kind);
+  if (!result.success) { answerTelegramCallback(callback.id, result.error, true); return result; }
+  answerTelegramCallback(callback.id, kind === "move" ? "Запись перенесена" : "Запись отменена");
+  editTelegramBookingMessages(result.booking, callback.message, kind === "move" ? "move" : "cancel");
+  if (kind === "cancel") sendClientBookingStatus(result.booking, "cancel");
+  else {
+    const clientChat = PropertiesService.getScriptProperties().getProperty(BOOKING_CLIENT_CHAT_PREFIX + result.booking.id);
+    if (clientChat) {
+      try {
+        sendClientBotMessage(clientChat, "📅 <b>Ваша запись перенесена</b>\n💅 " + escapeTelegram(result.booking.service) +
+          "\nБыло: " + staffDateLabel(result.previous.date) + " в " + escapeTelegram(result.previous.time) +
+          "\nСтало: " + staffDateLabel(result.booking.date) + " в " + escapeTelegram(result.booking.time) +
+          "\nСтатус: " + escapeTelegram(result.booking.status));
+      } catch (error) { console.error("Не удалось уведомить клиента о переносе: " + error.message); }
+    }
+  }
+  return result;
+}
+
+
 function handleStaffTelegramCallback(callback, event) {
   if (!checkTelegramWebhookAccess(event) || !isTelegramStaff(callback.from, callback.message && callback.message.chat)) {
     answerTelegramCallback(callback.id, "Доступ запрещён", true);
-    return { success: false, error: "Access denied" };
+    return {success:false, error:"Access denied"};
   }
-  const match = String(callback.data || "").match(/^admin_list:(today|tomorrow|pending):(\d{1,6})$/);
-  if (!match) {
-    answerTelegramCallback(callback.id, "Неизвестное действие", true);
-    return { success: false, error: "Invalid callback data" };
+  try {
+    return processStaffTelegramCallback(callback);
+  } catch (error) {
+    console.error("Ошибка рабочего меню: " + error.message);
+    answerTelegramCallback(callback.id, "Не удалось выполнить действие. Обновите список и повторите попытку.", true);
+    return {success:false, error:"Staff action failed"};
   }
-  answerTelegramCallback(callback.id, "Загружаю записи…");
-  sendStaffBookings(String(callback.message.chat.id), match[1], Number(match[2]));
-  return { success: true };
+}
+function cloneStaffAction(state, patch) {
+  const token = Utilities.getUuid().replace(/-/g, "").slice(0,16);
+  saveStaffAction(token, Object.assign({}, state, patch));
+  return token;
+}
+function processStaffTelegramCallback(callback) {
+  const chatId = String(callback.message.chat.id);
+  const data = String(callback.data || "");
+  let match;
+  if (data === "admin_noop") { answerTelegramCallback(callback.id, "Выберите доступную дату"); return {success:true}; }
+  if (data === "admin_home") { answerTelegramCallback(callback.id, "Главное меню"); staffBotMenu(chatId); return {success:true}; }
+  if ((match = data.match(/^admin_list:(today|tomorrow|pending):(\d{1,6})$/))) {
+    answerTelegramCallback(callback.id, "Загружаю записи…");
+    sendStaffBookings(chatId, match[1], Number(match[2]));
+    return {success:true};
+  }
+  if ((match = data.match(/^admin_date:(\d{4}-\d{2}-\d{2}):(\d{1,6})$/)) && isValidBookingDate(match[1])) {
+    answerTelegramCallback(callback.id, "Загружаю записи…");
+    sendStaffBookings(chatId, match[1], Number(match[2]));
+    return {success:true};
+  }
+  if ((match = data.match(/^admin_cal:(\d{4}-\d{2})$/))) {
+    answerTelegramCallback(callback.id, "Календарь");
+    sendStaffCalendar(chatId, match[1]);
+    return {success:true};
+  }
+  if ((match = data.match(/^admin_(move|cancel):([\w-]{1,40})$/))) {
+    answerTelegramCallback(callback.id, match[1] === "move" ? "Выберите новую дату" : "Подтвердите отмену");
+    if (match[1] === "cancel") requestStaffCancellation(chatId, match[2]);
+    else {
+      const action = startStaffAction(chatId, match[2], "move");
+      if (action) sendStaffCalendar(chatId, getDateAfterDays(0).slice(0,7), action.token);
+    }
+    return {success:true};
+  }
+  if ((match = data.match(/^admin_(cok|mok):([a-f0-9]{16})$/))) {
+    return finishStaffAction(callback, match[2], match[1] === "cok" ? "cancel" : "move");
+  }
+  if ((match = data.match(/^admin_abort:([a-f0-9]{16})$/))) {
+    const stopped = withBookingLock(function() {
+      if (!staffActionState(chatId, match[1])) return false;
+      CacheService.getScriptCache().remove("STAFF_ACTION_" + match[1]);
+      return true;
+    });
+    answerTelegramCallback(callback.id, stopped ? "Действие отменено" : "Действие уже обработано или кнопка устарела");
+    if (stopped) sendStaffTelegramMessage(chatId, "Действие отменено. Эта кнопка больше не изменит запись.");
+    return {success:stopped};
+  }
+  if ((match = data.match(/^admin_(mc|md|mt):([a-f0-9]{16}):([\d-]+)$/))) {
+    const state = staffActionState(chatId, match[2]);
+    if (!state || state.kind !== "move") {
+      answerTelegramCallback(callback.id, "Кнопка устарела. Откройте запись заново.", true);
+      return {success:false};
+    }
+    if (match[1] === "mc") {
+      answerTelegramCallback(callback.id, "Календарь");
+      sendStaffCalendar(chatId, match[3], match[2]);
+    } else if (match[1] === "md") {
+      const date = match[3];
+      const times = staffFreeTimes(date, state.id, getBookings(getSheet()));
+      if (!times.length) { answerTelegramCallback(callback.id, "На эту дату нет свободного времени", true); return {success:false}; }
+      const dateToken = cloneStaffAction(state, {date:date});
+      answerTelegramCallback(callback.id, "Выберите время");
+      const rows = times.map(function(time) { return [{text:time, callback_data:"admin_mt:" + dateToken + ":" + time.replace(":", "")}]; });
+      rows.push([{text:"Назад к датам",callback_data:"admin_mc:" + match[2] + ":" + date.slice(0,7)}]);
+      sendStaffTelegramMessage(chatId, "Свободное время на " + staffDateLabel(date) + ":", {inline_keyboard:rows});
+    } else {
+      if (!/^\d{4}$/.test(match[3]) || !state.date) throw new Error("Invalid time selection");
+      const time = match[3].slice(0,2) + ":" + match[3].slice(2);
+      if (!staffFreeTimes(state.date, state.id, getBookings(getSheet())).includes(time)) {
+        answerTelegramCallback(callback.id, "Время уже занято. Выберите другое.", true); return {success:false};
+      }
+      const confirmationToken = cloneStaffAction(state, {time:time});
+      answerTelegramCallback(callback.id, "Подтвердите перенос");
+      const original = JSON.parse(state.revision);
+      const booking = findBookingById(state.id);
+      sendStaffTelegramMessage(chatId, "<b>Перенести запись?</b>\n" + escapeTelegram(String(booking && booking.name || "Клиент").slice(0, 100)) +
+        "\nБыло: " + staffDateLabel(original[0]) + " в " + escapeTelegram(original[1]) +
+        "\nСтало: " + staffDateLabel(state.date) + " в " + time, {inline_keyboard:[
+        [{text:"Да, перенести", callback_data:"admin_mok:" + confirmationToken}],
+        [{text:"Нет, оставить запись",callback_data:"admin_abort:" + confirmationToken}]
+      ]});
+    }
+    return {success:true};
+  }
+  answerTelegramCallback(callback.id, "Кнопка устарела. Откройте меню заново.", true);
+  return {success:false, error:"Invalid callback data"};
 }
 
 function sendStaffBookings(chatId, mode, offset) {
   const today = getDateAfterDays(0);
-  const targetDate = mode === "tomorrow" ? getDateAfterDays(1) : today;
+  const targetDate = isValidBookingDate(mode) ? mode : mode === "tomorrow" ? getDateAfterDays(1) : today;
   const bookings = getBookings(getSheet()).filter(function(booking) {
     if (booking.status === "Отменена") return false;
     return mode === "pending"
@@ -2156,7 +2383,7 @@ function sendStaffBookings(chatId, mode, offset) {
   }).sort(function(a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
   const titles = { today: "Записи на сегодня", tomorrow: "Записи на завтра", pending: "Ожидают подтверждения" };
   const page = bookings.slice(offset, offset + 5);
-  sendStaffTelegramMessage(chatId, "<b>" + titles[mode] + "</b> — " + bookings.length +
+  sendStaffTelegramMessage(chatId, "<b>" + (titles[mode] || "Записи на " + staffDateLabel(targetDate)) + "</b> — " + bookings.length +
     (page.length ? "\nПоказаны " + (offset + 1) + "–" + (offset + page.length) : "\nЗаписей нет."));
   page.forEach(function(booking) {
     // Ограничиваем поля карточки, чтобы длинный комментарий не сорвал весь список.
@@ -2165,17 +2392,19 @@ function sendStaffBookings(chatId, mode, offset) {
       "\n📞 " + escapeTelegram(String(booking.phone).slice(0, 50)) +
       "\n💅 " + escapeTelegram(String(booking.service).slice(0, 150)) +
       "\nСтатус: " + escapeTelegram(booking.status);
-    const markup = booking.status === "Ожидает подтверждения" ? { inline_keyboard: [[
-      { text: "Подтвердить", callback_data: "booking_confirm:" + booking.id },
-      { text: "Отменить", callback_data: "booking_cancel:" + booking.id }
-    ]] } : undefined;
+    const markup = staffBookingButtons(booking);
     sendStaffTelegramMessage(chatId, text, markup);
   });
   if (offset + page.length < bookings.length) {
     sendStaffTelegramMessage(chatId, "Продолжить просмотр:", { inline_keyboard: [[{
-      text: "Следующие записи →", callback_data: "admin_list:" + mode + ":" + (offset + 5)
+      text: "Следующие записи →", callback_data: (isValidBookingDate(mode) ? "admin_date:" : "admin_list:") + mode + ":" + (offset + 5)
     }]] });
   }
+  if (mode !== "pending") sendStaffTelegramMessage(chatId, "Выбрать другой день:", {inline_keyboard:[[
+    {text:"‹ Предыдущий день", callback_data:"admin_date:" + staffDateShift(targetDate, -1) + ":0"},
+    {text:"Следующий день ›", callback_data:"admin_date:" + staffDateShift(targetDate, 1) + ":0"}
+  ], [{text:"Календарь", callback_data:"admin_cal:" + targetDate.slice(0,7)}, {text:"Главное меню",callback_data:"admin_home"}]]});
+
 }
 
 function clientBotMenu(chatId, text) {
