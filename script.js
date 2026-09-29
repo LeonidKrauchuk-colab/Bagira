@@ -1300,6 +1300,23 @@ if (bookingForm) {
         }
 
 
+        if (bookingDetails) {
+          const notice = document.createElement("p");
+          notice.textContent = "Для подтверждения или переноса записи мы свяжемся с вами по телефону.";
+          if (result.telegramLink && /^https:\/\/t\.me\/BagiraMasterBot\?start=booking_[a-f0-9]{32}$/.test(result.telegramLink)) {
+            notice.textContent = "Чтобы получать подтверждение, перенос и напоминания в Telegram, нажмите кнопку ниже, затем «Старт» в боте. До подключения мы свяжемся с вами по телефону. Ссылка действует 24 часа; не пересылайте её другим людям.";
+            const link = document.createElement("a");
+            link.href = result.telegramLink;
+            link.className = "main-button";
+            link.textContent = "Подключить уведомления в Telegram";
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            bookingDetails.append(notice, link);
+          } else {
+            bookingDetails.append(notice);
+          }
+        }
+
         // Обновляем свободные времена
 
         await loadBusyTimes();

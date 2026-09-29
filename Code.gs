@@ -720,6 +720,15 @@ function createBooking(data, clientChatId) {
         row
       ]);
 
+    const contactProperties = PropertiesService.getScriptProperties();
+    contactProperties.setProperty("BOOKING_SOURCE_" + id, clientChatId ? "bot" : "site");
+    let telegramLink = "";
+    if (!clientChatId && String(data.telegram || "").trim()) {
+      const token = Utilities.getUuid().replace(/-/g, "");
+      contactProperties.setProperty("BOOKING_LINK_" + token, JSON.stringify({id:id, expiresAt:Date.now()+86400000}));
+      telegramLink = "https://t.me/BagiraMasterBot?start=booking_" + token;
+    }
+
     if (clientChatId) {
       PropertiesService.getScriptProperties().setProperty(
         "BOOKING_CLIENT_CHAT_" + id,
@@ -797,7 +806,8 @@ function createBooking(data, clientChatId) {
         id,
 
       message:
-        "Запись успешно создана"
+        "Запись успешно создана",
+      telegramLink: telegramLink
 
     };
 
@@ -1719,7 +1729,7 @@ function formatBookingTelegramMessage(booking, outcome) {
       ? "❌ <b>Заказ отменен</b>\n\n"
       : "🔔 <b>НОВАЯ ЗАПИСЬ</b>\n\n";
 
-  return heading +
+  return heading + bookingContactText(booking) + "\n\n" +
     "👤 <b>Имя:</b> " + escapeTelegram(booking.name) + "\n" +
     "📞 <b>Телефон:</b> " + escapeTelegram(booking.phone) + "\n" +
     "💬 <b>Telegram:</b> " + escapeTelegram(booking.telegram || "—") + "\n" +
@@ -2423,7 +2433,7 @@ function staffBookingCardText(booking) {
     "\n👤 " + escapeTelegram(String(booking.name).slice(0,100)) +
     "\n📞 " + escapeTelegram(String(booking.phone).slice(0,50)) +
     "\n💅 " + escapeTelegram(String(booking.service).slice(0,150)) +
-    "\nСтатус: " + escapeTelegram(booking.status);
+    "\nСтатус: " + escapeTelegram(booking.status) + "\n" + bookingContactText(booking);
 }
 function sendStaffBookingCard(chatId,booking) {
   sendStaffTelegramMessage(chatId,staffBookingCardText(booking),staffBookingButtons(booking));
@@ -2765,6 +2775,8 @@ function handleClientTelegramMessage(message, event) {
   const chatId = String(message && message.chat && message.chat.id || "");
   if (!chatId || String(message.chat.type || "") !== "private") return { success: true };
   const text = String(message.text || "").trim();
+  const linkMatch = text.match(/^\/start(?:@BagiraMasterBot)? booking_([a-f0-9]{32})$/i);
+  if (linkMatch) return connectWebsiteBooking(chatId, linkMatch[1]);
   const state = getClientBotState(chatId);
 
   if (text === "/start" || text === "/menu" || text === "Отмена") {
@@ -3606,4 +3618,40 @@ function sendStaffSlotManager(chatId,date) {
   });
   rows.push([{text:"Выбрать дату",callback_data:"admin_sched:"+date.slice(0,7)},{text:"Главное меню",callback_data:"admin_home"}]);
   sendStaffTelegramMessage(chatId,"<b>Расписание на "+staffDateLabel(date)+"</b>\nЗакрытые окна недоступны для новых записей. Открытие окна не отменяет выходной день.",{inline_keyboard:rows});
+}
+
+// Источник сохраняется сервером и не зависит от введённого клиентом комментария.
+function bookingContactText(booking) {
+  const props = PropertiesService.getScriptProperties();
+  const source = props.getProperty("BOOKING_SOURCE_" + booking.id);
+  const linked = props.getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id);
+  const label = source === "bot" ? "Telegram-бот" : source === "site" ? "Сайт" : "Ранее созданная / ручная запись";
+  return "📍 <b>Источник:</b> " + label + "\n" + (linked
+    ? "💬 Telegram подключён — уведомления через бота."
+    : booking.telegram ? "☎️ Позвонить: Telegram указан, но уведомления через бота не подключены."
+    : "☎️ Позвонить клиенту для подтверждения или переноса.");
+}
+function connectWebsiteBooking(chatId, token) {
+  const result = withBookingLock(function() {
+    const props = PropertiesService.getScriptProperties();
+    const raw = props.getProperty("BOOKING_LINK_" + token);
+    if (!raw) return {success:false};
+    const link = JSON.parse(raw);
+    if (link.expiresAt < Date.now()) { props.deleteProperty("BOOKING_LINK_" + token); return {success:false}; }
+    const booking = findBookingById(link.id);
+    if (!booking) return {success:false};
+    const existing = props.getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id);
+    if (existing && existing !== String(chatId)) return {success:false};
+    props.setProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id,String(chatId));
+    return {success:true,booking:booking};
+  });
+  if (!result.success) {
+    sendClientBotMessage(chatId,"Ссылка недействительна, истекла или уже привязана к другому аккаунту. Свяжитесь с салоном по телефону.");
+    return {success:false};
+  }
+  const booking = result.booking;
+  clientBotMenu(chatId,"Уведомления подключены к вашей записи с сайта.\n💅 " + escapeTelegram(booking.service) +
+    "\n📅 " + formatDateForTelegram(booking.date) + " в " + escapeTelegram(booking.time) + "\nСтатус: " + escapeTelegram(booking.status));
+  editTelegramBookingMessages(booking,null,booking.status === "Активна" ? "confirm" : booking.status === "Отменена" ? "cancel" : "new");
+  return {success:true};
 }
