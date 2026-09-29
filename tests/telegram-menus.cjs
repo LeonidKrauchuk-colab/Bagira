@@ -1,7 +1,13 @@
 const assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm');
 const calls=[];
+const cache = new Map();
+const services = {
+ CacheService:{getScriptCache:()=>({get:key=>cache.get(key),put:(key,value)=>cache.set(key,value),remove:key=>cache.delete(key)})},
+ LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+ SpreadsheetApp:{flush(){}}
+};
 const properties={ADMIN_TELEGRAM_USER_ID:'1',MASTER_TELEGRAM_USER_ID:'2',TELEGRAM_WEBHOOK_SECRET:'secret'};
-const ctx=vm.createContext({console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],getProperties:()=>properties,deleteProperty(){}})}});
+const ctx=vm.createContext({...services,console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],getProperties:()=>properties,deleteProperty(){}})}});
 vm.runInContext(fs.readFileSync('Code.gs','utf8'),ctx);
 ctx.telegramApiCall=(method,payload,reply)=>{calls.push({method,payload,reply});return {};};
 ctx.jsonResponse=x=>x;
@@ -35,7 +41,7 @@ assert.equal(selected,'client');
 console.log('Role menus passed: client/admin/master, commands, staff access, configuration without broadcast.');
 // Execute real list and availability handlers, not just command routing.
 vm.runInContext(fs.readFileSync('Code.gs','utf8'),vm.createContext({}));
-const live=vm.createContext({console:{log(){},error(){}},PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],getProperties:()=>properties,deleteProperty(){}})}});
+const live=vm.createContext({...services,console:{log(){},error(){}},PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],getProperties:()=>properties,deleteProperty(){}})}});
 vm.runInContext(fs.readFileSync('Code.gs','utf8'),live);
 live.jsonResponse=x=>x;
 live.telegramWebhookResponse=x=>x;

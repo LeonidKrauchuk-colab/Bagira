@@ -1078,6 +1078,7 @@
     const closedDaysList = document.getElementById("closedDaysList");
     const closedDaysError = document.getElementById("closedDaysError");
     let closedDays = [];
+    let closedSlots = {};
     const scheduleSettingsToggle = document.getElementById("scheduleSettingsToggle");
     const scheduleSettingsPanel = document.getElementById("scheduleSettingsPanel");
     const scheduleSettingsChevron = document.getElementById("scheduleSettingsChevron");
@@ -1182,7 +1183,7 @@
       if (!date) return [];
       const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
       const schedule = settings.weeklySchedule.find(item => Number(item.day) === weekday);
-      return schedule && Array.isArray(schedule.slots) ? [...schedule.slots] : [];
+      return schedule && Array.isArray(schedule.slots) ? schedule.slots.filter(time => !(closedSlots[date] || []).includes(time)) : [];
     }
 
     function updateWorkTimesForSelectedDate() {
@@ -1225,6 +1226,7 @@
           throw new Error("Требуется вход через Telegram.");
         }
         if (!result.success) throw new Error(result.error || "Не удалось загрузить настройки расписания");
+        closedSlots = result.closedSlots || {};
         closedDays = Array.isArray(result.closedDays) ? result.closedDays : [];
         if (result.scheduleSettings) {
           scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
@@ -1725,12 +1727,13 @@
 
         if (ADMIN_SESSION_TOKEN !== requestToken) return;
         const bookings = result.bookings;
+        closedSlots = result.closedSlots || {};
+        updateWorkTimesForSelectedDate();
 
         const date = selectedDate.value;
 
         /*
-         * В админ-панели учитываем только активные записи.
-         * Ожидающие подтверждения и отменённые заявки не показываются.
+         * Все неотменённые записи занимают своё время, включая итоги визитов.
          */
         const activeBookings = bookings.filter(booking => {
 
@@ -1744,7 +1747,7 @@
 
           return (
             bookingDate === date &&
-            status === "активна"
+            status !== "отменена"
           );
 
         });
@@ -1891,7 +1894,7 @@
 
         <div>
           <strong>Статус:</strong>
-          🟢 Активна
+          ${escapeHtml(booking.status)}
         </div>
 
       </div>

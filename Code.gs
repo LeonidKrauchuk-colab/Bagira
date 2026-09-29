@@ -38,8 +38,8 @@ const ADMIN_TELEGRAM_USER_ID_PROPERTY =
   "ADMIN_TELEGRAM_USER_ID";
 
 const MASTER_TELEGRAM_USER_ID_PROPERTY = "MASTER_TELEGRAM_USER_ID";
-// Временно отключено. Для возврата сообщений мастеру установите true.
-const MASTER_TELEGRAM_NOTIFICATIONS_ENABLED = false;
+// Одинаковые автоуведомления для администратора и мастера.
+const MASTER_TELEGRAM_NOTIFICATIONS_ENABLED = true;
 
 // ============================================================
 // GET
@@ -66,6 +66,7 @@ function doGet(e) {
           return { date: booking.date, time: booking.time, status: booking.status };
         })
       : [];
+    if (requestedDate) getClosedSlots(requestedDate).forEach(function(time) { bookings.push({date:requestedDate,time:time,status:"Закрыто"}); });
     const closedDays = getClosedDays();
     const scheduleSettings = getScheduleSettings();
     const timezone = Session.getScriptTimeZone();
@@ -75,6 +76,7 @@ function doGet(e) {
       success: true,
       bookings: bookings,
       closedDays: closedDays,
+      closedSlots: getClosedSlotsMap(),
       scheduleSettings: scheduleSettings,
       today: Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
       currentTime: Utilities.formatDate(now, timezone, "HH:mm")
@@ -126,6 +128,7 @@ function getNearestAvailability(sheet) {
     for (let index = 0; index < times.length && slots.length < 6; index += 1) {
       const time = String(times[index]).slice(0, 5);
       if (dateString === today && time <= currentTime) continue;
+      if (isSlotClosed(dateString, time)) continue;
       if (busySlots[dateString] && busySlots[dateString][time]) continue;
       slots.push({ date: dateString, time: time });
     }
@@ -302,7 +305,8 @@ if (
 
   return jsonResponse({
     success: true,
-    bookings: bookings
+    bookings: bookings,
+    closedSlots: getClosedSlotsMap()
   });
 
 }
@@ -813,16 +817,11 @@ function createBooking(data, clientChatId) {
 // ============================================================
 
 function addAdminBooking(data) {
+  return withBookingLock(function() { return addAdminBookingLocked(data); });
+}
 
-  const lock =
-    LockService.getScriptLock();
-
-
-  lock.waitLock(10000);
-
-
-  try {
-
+// Вызывается только под общей блокировкой записей.
+function addAdminBookingLocked(data, bookingId) {
     if (
       !data.name ||
       !data.phone ||
@@ -873,8 +872,7 @@ function addAdminBooking(data) {
     }
 
 
-    const id =
-      Utilities.getUuid();
+    const id = bookingId || Utilities.getUuid();
 
 
     const createdAt =
@@ -955,15 +953,8 @@ function addAdminBooking(data) {
         "Запись добавлена"
 
     };
-
-
-  } finally {
-
-    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
-
-  }
-
 }
+
 
 
 
@@ -1897,7 +1888,7 @@ function editTelegramBookingMessages(booking, pressedMessage, outcome) {
       telegramApiCall("editMessageText", {
         chat_id: item.chatId,
         message_id: Number(item.messageId),
-        text: formatBookingTelegramMessage(booking, outcome),
+        text: ["Выполнена","Не пришёл"].includes(booking.status) ? staffBookingCardText(booking) : formatBookingTelegramMessage(booking, outcome),
         parse_mode: "HTML",
         reply_markup: staffBookingButtons(booking)
       }, item.chatId === pressedChatId && String(item.messageId) === pressedMessageId);
@@ -2103,13 +2094,14 @@ function sendStaffTelegramMessage(chatId, text, markup) {
   return telegramApiCall("sendMessage", {
     chat_id: String(chatId), text: text, parse_mode: "HTML",
     reply_markup: markup || {
-      keyboard: [["📅 Сегодня", "📅 Завтра"], ["🗓 Выбрать дату"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна"]],
+      keyboard: [["➕ Добавить запись", "🔎 Найти клиента"], ["📅 Сегодня", "📅 Завтра"], ["🗓 Выбрать дату"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна", "⚙️ Расписание"]],
       resize_keyboard: true
     }
   }, true);
 }
 
 function staffBotMenu(chatId) {
+  withBookingLock(function() { clearStaffDialog(chatId); });
   clearClientBotState(chatId);
   refreshTelegramChatCommands(chatId);
   return sendStaffTelegramMessage(chatId, "<b>Рабочее меню</b>\nВыберите записи для просмотра или свободные окна.");
@@ -2122,8 +2114,21 @@ function handleStaffTelegramMessage(message, event) {
   const chatId = String(message.chat.id);
   const text = String(message.text || "").trim();
   const actions = { "📅 Сегодня": "today", "/today": "today", "📅 Завтра": "tomorrow", "/tomorrow": "tomorrow", "⏳ Ожидают подтверждения": "pending", "/pending": "pending" };
+  if (text === "➕ Добавить запись") { startStaffCreation(chatId); return {success:true}; }
+  if (text === "🔎 Найти клиента") {
+    beginStaffDialog(chatId,"search");
+    sendStaffTelegramMessage(chatId,"Введите имя клиента или телефон. Можно часть имени или минимум 4 цифры номера.",staffInputKeyboard());
+    return {success:true};
+  }
+  if (["/start","/menu","Отмена","Главное меню"].includes(text)) { staffBotMenu(chatId); return {success:true}; }
+  if (!actions[text] && !["🗓 Выбрать дату","🕐 Свободные окна","/slots","⚙️ Расписание"].includes(text)) {
+    if (advanceStaffDialog(chatId,message)) return {success:true};
+  }
+  withBookingLock(function() { clearStaffDialog(chatId); });
   if (actions[text]) {
     sendStaffBookings(chatId, actions[text], 0);
+  } else if (text === "⚙️ Расписание") {
+    sendStaffCalendar(chatId, getDateAfterDays(0).slice(0,7), null, true);
   } else if (text === "🗓 Выбрать дату") {
     sendStaffCalendar(chatId, getDateAfterDays(0).slice(0, 7));
   } else if (text === "🕐 Свободные окна" || text === "/slots") {
@@ -2139,6 +2144,292 @@ function handleStaffTelegramMessage(message, event) {
   return { success: true };
 }
 
+// Диалоги сотрудников хранятся отдельно от клиентской записи и истекают за 30 минут.
+function readStaffDraft(chatId) {
+  const properties = PropertiesService.getScriptProperties();
+  const key = "STAFF_DRAFT_" + chatId;
+  const raw = properties.getProperty(key);
+  if (!raw) return null;
+  try {
+    const draft = JSON.parse(raw);
+    if (draft.state.chatId === String(chatId) && draft.state.expiresAt > Date.now()) return draft;
+  } catch (error) {
+    console.error("Некорректный черновик сотрудника");
+  }
+  properties.deleteProperty(key);
+  return null;
+}
+function staffDialog(chatId) {
+  const draft = readStaffDraft(chatId);
+  if (draft) return draft.state.step === "saved" ? null : draft;
+  const token = CacheService.getScriptCache().get("STAFF_DIALOG_" + chatId);
+  const state = token ? staffActionState(chatId, token) : null;
+  return state ? {token:token, state:state} : null;
+}
+function clearStaffDialog(chatId) {
+  PropertiesService.getScriptProperties().deleteProperty("STAFF_DRAFT_" + chatId);
+  const cache = CacheService.getScriptCache();
+  const token = cache.get("STAFF_DIALOG_" + chatId);
+  if (token) cache.remove("STAFF_ACTION_" + token);
+  cache.remove("STAFF_DIALOG_" + chatId);
+}
+function beginStaffDialog(chatId, kind) {
+  return withBookingLock(function() {
+    clearStaffDialog(chatId);
+    const token = Utilities.getUuid().replace(/-/g, "").slice(0,16);
+    const state = {chatId:String(chatId),kind:kind,step:kind === "create" ? "service" : "query",version:0,expiresAt:Date.now()+1800000};
+    if (kind === "create") state.bookingId = Utilities.getUuid();
+    saveStaffAction(token,state);
+    CacheService.getScriptCache().put("STAFF_DIALOG_" + chatId,token,1800);
+    return {token:token,state:state};
+  });
+}
+function staffInputKeyboard() {
+  return {keyboard:[["Отмена"]],resize_keyboard:true};
+}
+function startStaffCreation(chatId) {
+  const dialog = beginStaffDialog(chatId,"create");
+  const rows = CLIENT_BOT_SERVICES.map(function(service,index) {
+    return [{text:service,callback_data:"admin_ns:" + dialog.token + ":" + index}];
+  });
+  rows.push([{text:"Отмена",callback_data:"admin_nstop:" + dialog.token}]);
+  sendStaffTelegramMessage(chatId,"<b>Новая запись</b>\nВыберите услугу:",{inline_keyboard:rows});
+}
+function validStaffClientName(name) {
+  return typeof name === "string" && name.length >= 2 && name.length <= 80 && !/^[=+@-]|[\r\n]/.test(name);
+}
+function normalizeStaffClientPhone(phone) {
+  const value = String(phone || "").trim();
+  if (!/^[+\d\s().-]+$/.test(value)) return "";
+  let digits = value.replace(/\D/g, "");
+  if (/^80\d{9}$/.test(digits)) digits = "375" + digits.slice(2);
+  if (digits.length < 7 || digits.length > 15) return "";
+  return "+" + digits;
+}
+function sendStaffCreationPreview(chatId,token,state) {
+  sendStaffTelegramMessage(chatId,"<b>Создать активную запись?</b>\n👤 " + escapeTelegram(state.name) +
+    "\n📞 " + escapeTelegram(state.phone) + "\n💅 " + escapeTelegram(state.service) +
+    "\n📅 " + staffDateLabel(state.date) + " в " + state.time,
+    {inline_keyboard:[
+      [{text:"✅ Создать запись",callback_data:"admin_nok:" + token + ":" + state.version}],
+      [{text:"Выбрать другое время",callback_data:"admin_nagain:" + token + ":" + state.version}],
+      [{text:"Отмена",callback_data:"admin_nstop:" + token}]
+    ]});
+}
+function advanceStaffDialog(chatId,message) {
+  const result = withBookingLock(function() {
+    const dialog = staffDialog(chatId);
+    if (!dialog) return null;
+    const state = dialog.state;
+    if (message.message_id && Number(message.message_id) <= Number(state.lastMessageId || 0)) return {duplicate:true};
+    const text = String(message.text || "").trim();
+    let error;
+    if (state.kind === "search") {
+      const query = staffSearchQuery(text);
+      if (!query) error = "Введите минимум 2 буквы имени или 4 цифры телефона (до 80 символов).";
+      else {
+        const token = cloneStaffAction(state,{kind:"searchResults",query:query});
+        state.lastMessageId = message.message_id;
+        saveStaffAction(dialog.token,state);
+        return {searchToken:token};
+      }
+    } else if (state.kind === "create" && state.step === "name") {
+      if (!validStaffClientName(text)) error = "Введите имя клиента: от 2 до 80 символов, одной строкой.";
+      else { state.name = text; state.step = "phone"; }
+    } else if (state.kind === "create" && state.step === "phone") {
+      const phone = normalizeStaffClientPhone(message.contact ? message.contact.phone_number : text);
+      if (!phone) error = "Введите телефон клиента с кодом страны, например +375291234567.";
+      else { state.phone = phone; state.step = "confirm"; }
+    } else {
+      return {error:"Продолжите кнопками в сообщении или нажмите «Отмена»."};
+    }
+    state.lastMessageId = message.message_id;
+    state.version += 1;
+    saveStaffAction(dialog.token,state);
+    return {token:dialog.token,state:state,error:error};
+  });
+  if (!result) return false;
+  if (result.duplicate) return true;
+  if (result.searchToken) sendStaffSearchResults(chatId,result.searchToken,0);
+  else if (result.error) sendStaffTelegramMessage(chatId,result.error,staffInputKeyboard());
+  else if (result.state.step === "phone") sendStaffTelegramMessage(chatId,"Введите телефон <b>клиента</b> с кодом страны:",staffInputKeyboard());
+  else sendStaffCreationPreview(chatId,result.token,result.state);
+  return true;
+}
+// Сохранённая строка — результат операции. Сбой служебной отметки или
+// сообщения Telegram не должен превращать её в «не удалось создать».
+function completeStaffCreationDraft(chatId, token, state) {
+  state.step = "saved";
+  try { saveStaffAction(token,state); }
+  catch (error) { console.error("Запись сохранена; не обновлён черновик: " + error.message); }
+  try { CacheService.getScriptCache().remove("STAFF_DIALOG_" + chatId); }
+  catch (error) { console.error("Запись сохранена; не очищен кэш диалога: " + error.message); }
+}
+
+function notifyStaffBookingCreated(callback, booking) {
+  const chatId = String(callback.message.chat.id);
+  answerTelegramCallback(callback.id,"Запись создана и сразу активна.",true);
+  let cardDelivered = false;
+  // Убираем кнопку создания даже при ошибке отправки отдельной карточки.
+  try {
+    telegramApiCall("editMessageText", {
+      chat_id: chatId,
+      message_id: callback.message.message_id,
+      text: "✅ <b>Запись создана и сразу активна.</b>\n" + staffBookingCardText(booking),
+      parse_mode: "HTML",
+      reply_markup: staffBookingButtons(booking)
+    }, true);
+    cardDelivered = true;
+  } catch (error) {
+    console.error("Запись сохранена; не обновлено подтверждение Telegram: " + error.message);
+  }
+  if (!cardDelivered) {
+  try {
+    sendStaffBookingCard(chatId,booking);
+    cardDelivered = true;
+  } catch (error) {
+    console.error("Запись сохранена; не отправлена карточка Telegram: " + error.message);
+  }
+  }
+  try {
+    sendStaffTelegramMessage(chatId,cardDelivered ? "Запись сохранена. Выберите следующее действие." :
+      "✅ Запись сохранена в таблице. Карточку отправить не удалось. Откройте список записей; создавать её повторно не нужно.");
+  } catch (error) {
+    console.error("Запись сохранена; не отправлено меню Telegram: " + error.message);
+  }
+}
+
+function handleStaffCreationCallback(callback, action, token, value, extra) {
+  const chatId = String(callback.message.chat.id);
+  let result;
+  try {
+    result = withBookingLock(function() {
+    const draft = readStaffDraft(chatId);
+    if (action === "nok" && draft && draft.token === token && String(draft.state.version) === value && draft.state.bookingId) {
+      const existing = findBookingById(draft.state.bookingId);
+      if (existing) {
+        completeStaffCreationDraft(chatId,token,draft.state);
+        return {success:true,view:"already_saved"};
+      }
+      if (draft.state.step === "saved") return {success:false,error:"Эта запись была создана, а затем удалена. Для новой записи начните заново."};
+    }
+    const dialog = staffDialog(chatId);
+    if (!dialog || dialog.token !== token || dialog.state.kind !== "create") return {success:false,error:"Черновик закрыт или устарел. Нажмите «Добавить запись»."};
+    const state = dialog.state;
+    if (action === "nstop") { clearStaffDialog(chatId); return {success:true,view:"stopped"}; }
+    if (action === "ns" && state.step === "service" && /^\d+$/.test(value) && CLIENT_BOT_SERVICES[Number(value)]) {
+      state.service = CLIENT_BOT_SERVICES[Number(value)]; state.step = "date";
+    } else if (action === "nc" && ["date","time"].includes(state.step)) {
+      return {success:true,view:"calendar",month:value,state:state};
+    } else if (action === "nd" && ["date","time"].includes(state.step)) {
+      if (!staffFreeTimes(value,null,getBookings(getSheet())).length) return {success:false,error:"На эту дату нет свободного времени."};
+      state.date = value; state.step = "time";
+    } else if (action === "nt" && state.step === "time") {
+      if (value !== state.date || !/^\d{4}$/.test(extra || "")) return {success:false,error:"Эта кнопка относится к другой дате. Выберите время заново."};
+      const time = extra.slice(0,2) + ":" + extra.slice(2);
+      if (!staffFreeTimes(state.date,null,getBookings(getSheet())).includes(time)) return {success:false,error:"Время уже занято. Выберите другое."};
+      state.time = time; state.step = state.name && state.phone ? "confirm" : "name";
+    } else if (["nok","nagain"].includes(action) && state.step === "confirm" && String(state.version) === value) {
+      if (action === "nagain") { state.step = "date"; delete state.time; }
+      else {
+        if (!validStaffClientName(state.name) || !normalizeStaffClientPhone(state.phone) || !CLIENT_BOT_SERVICES.includes(state.service)) return {success:false,error:"Проверьте данные клиента."};
+        if (!staffFreeTimes(state.date,null,getBookings(getSheet())).includes(state.time)) return {success:false,error:"Время занято или недоступно. Нажмите «Выбрать другое время»."};
+        const saved = addAdminBookingLocked({name:state.name,phone:state.phone,service:state.service,date:state.date,time:state.time,comment:"Добавлено сотрудником через Telegram"},state.bookingId);
+        if (!saved.success) return saved;
+        completeStaffCreationDraft(chatId,token,state);
+        return {success:true,view:"saved",booking:{id:saved.id,name:state.name,phone:state.phone,service:state.service,date:state.date,time:state.time,status:"Активна"}};
+      }
+    } else return {success:false,error:"Кнопка устарела. Продолжите по последнему сообщению."};
+    state.version += 1;
+    saveStaffAction(token,state);
+    return {success:true,view:state.step,state:state};
+    });
+  } catch (error) {
+    // Возможно, строка записана, а последующий формат/flush завершился ошибкой.
+    // Восстанавливаем успех только по закреплённому за этим подтверждением ID.
+    const draft = action === "nok" ? readStaffDraft(chatId) : null;
+    const existing = draft && draft.token === token && String(draft.state.version) === value && draft.state.bookingId
+      ? findBookingById(draft.state.bookingId) : null;
+    if (!existing) throw error;
+    console.error("Запись найдена после ошибки завершения: " + error.message);
+    result = {success:true,view:"saved",booking:existing};
+  }
+  if (!result.success) { answerTelegramCallback(callback.id,result.error,true); return result; }
+  if (result.view === "already_saved") {
+    answerTelegramCallback(callback.id,"Запись уже создана. Посмотрите её в списке записей.",true);
+    return {success:true};
+  }
+  if (result.view === "saved") {
+    notifyStaffBookingCreated(callback,result.booking);
+    return {success:true};
+  }
+  answerTelegramCallback(callback.id,"Готово");
+  if (result.view === "stopped") staffBotMenu(chatId);
+  else if (["calendar","date"].includes(result.view)) {
+    sendStaffCalendar(chatId,result.month || getDateAfterDays(0).slice(0,7),token);
+  } else if (result.view === "time") {
+    const state = result.state;
+    const rows = staffFreeTimes(state.date,null,getBookings(getSheet())).map(function(time) {
+      return [{text:time,callback_data:"admin_nt:" + token + ":" + state.date + ":" + time.replace(":", "")}];
+    });
+    rows.push([{text:"Назад к датам",callback_data:"admin_nc:" + token + ":" + state.date.slice(0,7)}, {text:"Отмена",callback_data:"admin_nstop:" + token}]);
+    sendStaffTelegramMessage(chatId,"Свободное время на " + staffDateLabel(state.date) + ":",{inline_keyboard:rows});
+  } else if (result.view === "name") sendStaffTelegramMessage(chatId,"Как зовут клиента?",staffInputKeyboard());
+  else if (result.view === "confirm") sendStaffCreationPreview(chatId,token,result.state);
+  return {success:true};
+}
+
+function staffSearchQuery(text) {
+  const query = String(text || "").trim().toLowerCase().replace(/ё/g,"е").replace(/\s+/g," ");
+  if (query.length > 80) return null;
+  if (/^[+\d\s().-]+$/.test(query)) {
+    const digits = query.replace(/\D/g, "");
+    return digits.length >= 4 && digits.length <= 15 ? {type:"phone",value:digits} : null;
+  }
+  return query.length >= 2 && /[a-zа-я]/i.test(query) ? {type:"name",value:query} : null;
+}
+function staffSearchPhone(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (/^80\d{9}$/.test(digits)) digits = "375" + digits.slice(2);
+  return digits;
+}
+function sendStaffSearchResults(chatId,token,offset) {
+  const state = staffActionState(chatId,token);
+  if (!state || state.kind !== "searchResults") {
+    sendStaffTelegramMessage(chatId,"Поиск устарел. Нажмите «Найти клиента» ещё раз."); return;
+  }
+  const query = state.query;
+  const today = getDateAfterDays(0);
+  const bookings = getBookings(getSheet()).filter(function(booking) {
+    if (query.type === "phone") return staffSearchPhone(booking.phone).includes(staffSearchPhone(query.value));
+    const name = String(booking.name || "").toLowerCase().replace(/ё/g,"е").replace(/\s+/g," ");
+    return query.value.split(" ").every(function(part) { return name.includes(part); });
+  }).sort(function(a,b) {
+    const aFuture = a.date >= today && a.status !== "Отменена";
+    const bFuture = b.date >= today && b.status !== "Отменена";
+    if (aFuture !== bFuture) return aFuture ? -1 : 1;
+    return aFuture ? (a.date+a.time).localeCompare(b.date+b.time) : (b.date+b.time).localeCompare(a.date+a.time);
+  });
+  const page = bookings.slice(offset,offset+5);
+  sendStaffTelegramMessage(chatId,"<b>Поиск: " + escapeTelegram(query.value) + "</b>\nНайдено записей: " + bookings.length +
+    (page.length ? "\nПоказаны " + (offset+1) + "–" + (offset+page.length) : "\nУточните имя или телефон и отправьте новый запрос."));
+  page.forEach(function(booking) { sendStaffBookingCard(chatId,booking); });
+  if (offset+page.length < bookings.length) sendStaffTelegramMessage(chatId,"Продолжить просмотр:",{inline_keyboard:[[
+    {text:"Следующие записи →",callback_data:"admin_search:" + token + ":" + (offset+5)}
+  ]]});
+}
+function staffBookingCardText(booking) {
+  return "📅 " + escapeTelegram(staffDateLabel(booking.date) + " " + booking.time) +
+    "\n👤 " + escapeTelegram(String(booking.name).slice(0,100)) +
+    "\n📞 " + escapeTelegram(String(booking.phone).slice(0,50)) +
+    "\n💅 " + escapeTelegram(String(booking.service).slice(0,150)) +
+    "\nСтатус: " + escapeTelegram(booking.status);
+}
+function sendStaffBookingCard(chatId,booking) {
+  sendStaffTelegramMessage(chatId,staffBookingCardText(booking),staffBookingButtons(booking));
+}
+
+
 // Календарь и действия сотрудников. Одноразовые кнопки привязаны к чату на 30 минут.
 function staffDateLabel(date) { return String(date).split("-").reverse().join("."); }
 function staffDateShift(date, days) {
@@ -2151,12 +2442,19 @@ function staffBookingRevision(booking) {
 }
 function staffActionState(chatId, token) {
   if (!/^[a-f0-9]{16}$/.test(token)) return null;
+  const draft = readStaffDraft(chatId);
+  if (draft && draft.token === token) return draft.state;
   const raw = CacheService.getScriptCache().get("STAFF_ACTION_" + token);
   if (!raw) return null;
   const state = JSON.parse(raw);
-  return state.chatId === String(chatId) && state.expiresAt > Date.now() ? state : null;
+  // Старые кэшированные черновики не восстанавливаются после отмены.
+  return state.kind !== "create" && state.chatId === String(chatId) && state.expiresAt > Date.now() ? state : null;
 }
 function saveStaffAction(token, state) {
+  if (state.kind === "create") {
+    PropertiesService.getScriptProperties().setProperty("STAFF_DRAFT_" + state.chatId, JSON.stringify({token:token,state:state}));
+    return;
+  }
   CacheService.getScriptCache().put("STAFF_ACTION_" + token, JSON.stringify(state), 1800);
 }
 function startStaffAction(chatId, id, kind) {
@@ -2171,8 +2469,13 @@ function startStaffAction(chatId, id, kind) {
   return { token: token, booking: booking };
 }
 function staffBookingButtons(booking) {
+  if (["Выполнена", "Не пришёл"].includes(booking.status)) return {inline_keyboard:[[{text:"Исправить отметку",callback_data:"admin_visit:active:" + booking.id}]]};
   if (!["Активна", "Ожидает подтверждения"].includes(booking.status)) return { inline_keyboard: [] };
   const rows = [];
+  if (booking.status === "Активна" && bookingHasStarted(booking)) rows.push([
+    {text:"Выполнена",callback_data:"admin_visit:done:" + booking.id},
+    {text:"Не пришёл",callback_data:"admin_visit:missed:" + booking.id}
+  ]);
   if (booking.status === "Ожидает подтверждения") rows.push([{ text: "Подтвердить", callback_data: "booking_confirm:" + booking.id }]);
   rows.push([
     { text: "Перенести", callback_data: "admin_move:" + booking.id },
@@ -2180,7 +2483,7 @@ function staffBookingButtons(booking) {
   ]);
   return { inline_keyboard: rows };
 }
-function sendStaffCalendar(chatId, month, token) {
+function sendStaffCalendar(chatId, month, token, manageSlots) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !isValidBookingDate(month + "-01")) throw new Error("Некорректный месяц");
   const first = month + "-01";
   const next = new Date(first + "T00:00:00Z");
@@ -2189,29 +2492,30 @@ function sendStaffCalendar(chatId, month, token) {
   const previous = new Date(first + "T00:00:00Z");
   previous.setUTCMonth(previous.getUTCMonth() - 1);
   const prevMonth = previous.toISOString().slice(0, 7);
-  const calendarPrefix = token ? "admin_mc:" + token + ":" : "admin_cal:";
+  const state = token ? staffActionState(chatId, token) : null;
+  if (token && (!state || !["move","create"].includes(state.kind))) return sendStaffTelegramMessage(chatId,"Кнопка устарела. Начните действие заново.");
+  const creating = state && state.kind === "create";
+  const calendarPrefix = token ? (creating ? "admin_nc:" : "admin_mc:") + token + ":" : (manageSlots ? "admin_sched:" : "admin_cal:");
   const rows = [[{ text: "‹", callback_data: calendarPrefix + prevMonth },
     { text: month.split("-").reverse().join("."), callback_data: "admin_noop" },
     { text: "›", callback_data: calendarPrefix + nextMonth }]];
   rows.push(["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map(function(day) { return { text: day, callback_data: "admin_noop" }; }));
   let week = Array.from({length: (new Date(first + "T00:00:00Z").getUTCDay() + 6) % 7}, function() { return {text:"·",callback_data:"admin_noop"}; });
-  const state = token ? staffActionState(chatId, token) : null;
-  if (token && (!state || state.kind !== "move")) return sendStaffTelegramMessage(chatId, "Кнопка устарела. Откройте запись заново.");
   const bookings = token ? getBookings(getSheet()) : [];
   for (let date = first; date < nextMonth + "-01"; date = staffDateShift(date, 1)) {
-    const available = !token || staffFreeTimes(date, state.id, bookings).length > 0;
+    const available = manageSlots ? isBookingDateAllowed(date) : !token || staffFreeTimes(date, state.id, bookings).length > 0;
     week.push({ text: available ? String(Number(date.slice(8))) : "·", callback_data: available
-      ? (token ? "admin_md:" + token + ":" + date : "admin_date:" + date + ":0") : "admin_noop" });
+      ? (token ? (creating ? "admin_nd:" : "admin_md:") + token + ":" + date : (manageSlots ? "admin_slots:" + date : "admin_date:" + date + ":0")) : "admin_noop" });
     if (week.length === 7) { rows.push(week); week = []; }
   }
   if (week.length) rows.push(week);
   rows.push([{ text:"Главное меню", callback_data:"admin_home" }]);
-  sendStaffTelegramMessage(chatId, token ? "Выберите новую дату. Дни без свободного времени отмечены точкой." : "Выберите дату для просмотра записей:", {inline_keyboard:rows});
+  sendStaffTelegramMessage(chatId, manageSlots ? "Выберите дату для закрытия или открытия отдельных окон:" : token ? "Выберите дату. Дни без свободного времени отмечены точкой." : "Выберите дату для просмотра записей:", {inline_keyboard:rows});
 }
 function staffFreeTimes(date, excludeId, bookings) {
   if (!isValidBookingDate(date) || !isBookingDateAllowed(date) || isClosedDay(date)) return [];
   return getScheduleTimes(date).filter(function(time) {
-    return !isPastBookingTime(date, time) && !bookings.some(function(booking) {
+    return !isSlotClosed(date, time) && !isPastBookingTime(date, time) && !bookings.some(function(booking) {
       return booking.id !== excludeId && booking.status !== "Отменена" && booking.date === date && booking.time === time;
     });
   });
@@ -2292,6 +2596,40 @@ function processStaffTelegramCallback(callback) {
   const chatId = String(callback.message.chat.id);
   const data = String(callback.data || "");
   let match;
+  if ((match = data.match(/^admin_visit:(done|missed|active):([\w-]+)$/))) {
+    const result = setStaffVisitStatus(match[2], match[1]);
+    answerStaffSavedAction(callback.id, result, "Статус сохранён");
+    if (result.success) {
+      editTelegramBookingMessages(result.booking,callback.message,"confirm");
+      try { sendStaffBookingCard(chatId, result.booking); } catch (error) { console.error("Статус сохранён, карточка не доставлена: " + error.message); }
+    }
+    return result;
+  }
+  if ((match = data.match(/^admin_sched:(\d{4}-\d{2})$/))) {
+    answerTelegramCallback(callback.id,"Расписание");
+    sendStaffCalendar(chatId,match[1],null,true); return {success:true};
+  }
+  if ((match = data.match(/^admin_slots:(\d{4}-\d{2}-\d{2})$/))) {
+    answerTelegramCallback(callback.id,"Расписание"); sendStaffSlotManager(chatId,match[1]); return {success:true};
+  }
+  if ((match = data.match(/^admin_slot:(close|open):(\d{4}-\d{2}-\d{2}):(\d{2})(\d{2})$/))) {
+    const result = setStaffSlotClosed(match[2],match[3]+":"+match[4],match[1]==="close");
+    answerStaffSavedAction(callback.id,result,"Расписание сохранено");
+    if (result.success) {
+      try { sendStaffSlotManager(chatId,match[2]); }
+      catch (error) { console.error("Расписание сохранено, сообщение не доставлено: " + error.message); }
+    }
+    return result;
+  }
+
+  if ((match = data.match(/^admin_(ns|nc|nd|nt|nok|nagain|nstop):([a-f0-9]{16})(?::([\d-]+))?(?::(\d{4}))?$/))) {
+    return handleStaffCreationCallback(callback,match[1],match[2],match[3],match[4]);
+  }
+  if ((match = data.match(/^admin_search:([a-f0-9]{16}):(\d{1,6})$/))) {
+    answerTelegramCallback(callback.id,"Загружаю результаты…");
+    sendStaffSearchResults(chatId,match[1],Number(match[2]));
+    return {success:true};
+  }
   if (data === "admin_noop") { answerTelegramCallback(callback.id, "Выберите доступную дату"); return {success:true}; }
   if (data === "admin_home") { answerTelegramCallback(callback.id, "Главное меню"); staffBotMenu(chatId); return {success:true}; }
   if ((match = data.match(/^admin_list:(today|tomorrow|pending):(\d{1,6})$/))) {
@@ -2385,16 +2723,7 @@ function sendStaffBookings(chatId, mode, offset) {
   const page = bookings.slice(offset, offset + 5);
   sendStaffTelegramMessage(chatId, "<b>" + (titles[mode] || "Записи на " + staffDateLabel(targetDate)) + "</b> — " + bookings.length +
     (page.length ? "\nПоказаны " + (offset + 1) + "–" + (offset + page.length) : "\nЗаписей нет."));
-  page.forEach(function(booking) {
-    // Ограничиваем поля карточки, чтобы длинный комментарий не сорвал весь список.
-    const text = "📅 " + escapeTelegram(booking.date + " " + booking.time) +
-      "\n👤 " + escapeTelegram(String(booking.name).slice(0, 100)) +
-      "\n📞 " + escapeTelegram(String(booking.phone).slice(0, 50)) +
-      "\n💅 " + escapeTelegram(String(booking.service).slice(0, 150)) +
-      "\nСтатус: " + escapeTelegram(booking.status);
-    const markup = staffBookingButtons(booking);
-    sendStaffTelegramMessage(chatId, text, markup);
-  });
+  page.forEach(function(booking) { sendStaffBookingCard(chatId,booking); });
   if (offset + page.length < bookings.length) {
     sendStaffTelegramMessage(chatId, "Продолжить просмотр:", { inline_keyboard: [[{
       text: "Следующие записи →", callback_data: (isValidBookingDate(mode) ? "admin_date:" : "admin_list:") + mode + ":" + (offset + 5)
@@ -2578,7 +2907,7 @@ function createClientTelegramBooking(chatId, user, state, phone) {
 function sendClientBookings(chatId) {
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
   const rows = getBookings(getSheet()).filter(function(booking) {
-    return booking.date >= today && booking.status !== "Отменена" &&
+    return booking.date >= today && ["Активна","Ожидает подтверждения"].includes(booking.status) &&
       String(PropertiesService.getScriptProperties().getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id) || "") === String(chatId);
   }).sort(function(a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
   if (!rows.length) {
@@ -3095,7 +3424,7 @@ function getScheduleTimes(date, settings) {
 
 function isBookingTimeAllowed(time, date) {
   return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)
-    && isValidBookingDate(date) && getScheduleTimes(date).indexOf(time) !== -1;
+    && isValidBookingDate(date) && getScheduleTimes(date).indexOf(time) !== -1 && !isSlotClosed(date, time);
 }
 
 function getDateAfterDays(days) {
@@ -3210,4 +3539,71 @@ function withBookingLock(operation) {
   } finally {
     try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
+}
+
+// Общие для сайта, клиентского бота и сотрудников ограничения отдельных окон.
+function answerStaffSavedAction(callbackId, result, message) {
+  try { answerTelegramCallback(callbackId, result.success ? message : result.error, !result.success); }
+  catch (error) { console.error("Не доставлен ответ на кнопку: " + error.message); }
+}
+function getClosedSlots(date) {
+  if (!isValidBookingDate(date)) return [];
+  const raw = PropertiesService.getScriptProperties().getProperty("CLOSED_SLOTS_" + date);
+  return raw ? JSON.parse(raw) : [];
+}
+function getClosedSlotsMap() {
+  const values = PropertiesService.getScriptProperties().getProperties();
+  const result = {};
+  Object.keys(values).forEach(function(key) {
+    if (/^CLOSED_SLOTS_\d{4}-\d{2}-\d{2}$/.test(key)) result[key.slice(13)] = JSON.parse(values[key]);
+  });
+  return result;
+}
+function isSlotClosed(date,time) { return getClosedSlots(date).includes(time); }
+function bookingHasStarted(booking) {
+  return booking.date < getDateAfterDays(0) || isPastBookingTime(booking.date, booking.time);
+}
+function setStaffVisitStatus(id, action) {
+  return withBookingLock(function() {
+    const booking = findBookingById(id);
+    if (!booking) return {success:false,error:"Запись не найдена"};
+    const status = {done:"Выполнена",missed:"Не пришёл",active:"Активна"}[action];
+    if (!status || !bookingHasStarted(booking) || !["Активна","Выполнена","Не пришёл"].includes(booking.status))
+      return {success:false,error:"Отметка доступна только для подтверждённой записи после начала визита."};
+    // Старые кнопки не должны переписывать уже поставленную отметку.
+    if (action !== "active" && booking.status !== "Активна" && booking.status !== status)
+      return {success:false,error:"Сначала нажмите «Исправить отметку» в новой карточке."};
+    getSheet().getRange(booking.rowNumber,9).setValue(status);
+    booking.status = status;
+    return {success:true,booking:booking};
+  });
+}
+function setStaffSlotClosed(date,time,closed) {
+  return withBookingLock(function() {
+    if (!isValidBookingDate(date) || !isBookingDateAllowed(date) || isPastBookingTime(date,time) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))
+      return {success:false,error:"Выберите будущее время в периоде записи."};
+    if (closed && (isClosedDay(date) || !getScheduleTimes(date).includes(time)))
+      return {success:false,error:"Время отсутствует в рабочем расписании."};
+    if (closed && getBookings(getSheet()).some(function(b) { return b.date===date && b.time===time && b.status!=="Отменена"; }))
+      return {success:false,error:"Окно занято. Сначала перенесите или отмените запись."};
+    const times = getClosedSlots(date).filter(function(t) { return t!==time; });
+    if (closed) times.push(time);
+    const props = PropertiesService.getScriptProperties(), key = "CLOSED_SLOTS_"+date;
+    if (times.length) props.setProperty(key,JSON.stringify(times.sort())); else props.deleteProperty(key);
+    return {success:true};
+  });
+}
+function sendStaffSlotManager(chatId,date) {
+  if (!isValidBookingDate(date) || !isBookingDateAllowed(date)) return sendStaffTelegramMessage(chatId,"Дата вне периода записи.");
+  const bookings = getBookings(getSheet());
+  const times = Array.from(new Set(getScheduleTimes(date).concat(getClosedSlots(date)))).sort();
+  const rows = times.map(function(time) {
+    const closed = isSlotClosed(date,time);
+    const busy = bookings.some(function(b) { return b.date===date && b.time===time && b.status!=="Отменена"; });
+    const unavailable = isPastBookingTime(date,time) || busy || (isClosedDay(date) && !closed);
+    return [{text:time + (busy ? " — занято" : unavailable ? " — недоступно" : closed ? " — открыть" : " — закрыть"),
+      callback_data:unavailable ? "admin_noop" : "admin_slot:"+(closed ? "open:" : "close:")+date+":"+time.replace(":","")}];
+  });
+  rows.push([{text:"Выбрать дату",callback_data:"admin_sched:"+date.slice(0,7)},{text:"Главное меню",callback_data:"admin_home"}]);
+  sendStaffTelegramMessage(chatId,"<b>Расписание на "+staffDateLabel(date)+"</b>\nЗакрытые окна недоступны для новых записей. Открытие окна не отменяет выходной день.",{inline_keyboard:rows});
 }
