@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-static-v13";
+const CACHE_NAME = "bagira-static-v14";
 
 const APP_SHELL = [
   "./",

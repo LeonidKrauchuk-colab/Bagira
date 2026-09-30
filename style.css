@@ -3239,3 +3239,27 @@ button:disabled {cursor:wait;}
 .calendar-grid button[aria-pressed="true"] {background:#81565d;color:white;}
 
 .draft-clear {font:inherit;color:#56343d;background:none;border:0;text-decoration:underline;cursor:pointer;padding:6px;}
+
+/* Приглашение в Telegram перед формой записи */
+.bot-promo {padding:64px 0 0;background:#fff;}
+.bot-promo-card {display:flex;align-items:flex-start;gap:36px;padding:40px;background:#f8f1f3;border:1px solid #eadce1;border-radius:28px;}
+.bot-promo-avatar {position:relative;flex:0 0 128px;width:128px;height:128px;border-radius:50%;background:#fff;padding:14px;box-sizing:border-box;}
+.bot-promo-avatar img {display:block;width:100%;height:100%;object-fit:contain;}
+.bot-promo-badge {position:absolute;right:-3px;bottom:0;display:grid;place-items:center;width:44px;height:44px;background:#2481b8;color:#fff;border:3px solid #f8f1f3;border-radius:50%;}
+.bot-promo-content {flex:1;min-width:0;}
+.bot-promo-eyebrow {margin:0 0 8px;color:#81565d;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;}
+.bot-promo-content h2 {margin:0 0 12px;color:#34292d;font-size:clamp(30px,4vw,42px);line-height:1.15;}
+.bot-promo-intro {margin:0;color:#66535b;line-height:1.6;}
+.bot-promo-benefits {display:grid;gap:12px;margin:24px 0;padding:0;list-style:none;}
+.bot-promo-benefits li {display:flex;gap:12px;align-items:baseline;color:#49383f;font-size:15px;line-height:1.6;}
+.bot-promo-benefits li>span:first-child {flex:0 0 24px;}
+.bot-promo-link {display:inline-flex;justify-content:center;align-items:center;min-height:48px;white-space:normal;text-align:center;box-sizing:border-box;}
+.bot-promo-start {margin:12px 0 0;color:#66535b;font-size:14px;line-height:1.5;}
+.bot-promo-note {margin:20px 0 0;padding-top:16px;border-top:1px solid #e2cfd6;color:#66535b;font-size:13px;line-height:1.6;max-width:640px;}
+@media(max-width:600px) {
+  .bot-promo {padding-top:36px;}
+  .bot-promo-card {flex-direction:column;gap:24px;padding:24px 20px;border-radius:22px;}
+  .bot-promo-avatar {flex-basis:auto;width:96px;height:96px;padding:10px;}
+  .bot-promo-content {width:100%;}
+  .bot-promo-link {width:100%;padding:16px 12px;font-size:15px;}
+}
