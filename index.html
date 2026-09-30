@@ -20,6 +20,7 @@
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap"
             rel="stylesheet" />
       <link href="style.css" rel="stylesheet" />
+      <link rel="preload" as="image" href="images/bacground_images/hero.avif" />
       <!-- PWA -->
       <link href="./manifest.json" rel="manifest" />
       <meta content="#111111" name="theme-color" />
@@ -275,7 +276,7 @@
       <header class="header">
             <div class="container header-inner">
                   <a class="logo" href="#">
-                        <img alt="logo" src="images/logo_images/logo.png" width="70" />
+                        <img alt="Мастерская Багира" src="images/logo_images/logo.png" width="70" height="70" />
                   </a>
                   <!-- Навигация -->
                   <nav class="nav" id="nav">
@@ -329,7 +330,7 @@
       <!-- ================= HERO ================= -->
       <main>
             <section class="hero">
-                  <img alt="logo" class="logo_hero" decoding="async" src="images/logo_images/logo.png" />
+                  <img alt="Мастерская Багира" class="logo_hero" width="1254" height="1254" decoding="async" src="images/logo_images/logo.png" />
                   <span class="span_hero">
                         Багира
                   </span>
@@ -505,7 +506,7 @@
                         <div class="gallery-carousels">
                               <!-- Карусель 1 -->
                               <div class="gallery-carousel">
-                                    <button class="gallery-prev">
+                                    <button class="gallery-prev" aria-label="Предыдущая работа">
                                           ←
                                     </button>
                                     <div class="gallery-track">
@@ -539,7 +540,7 @@
                                           </div>
                                           <!-- ещё фотографии -->
                                     </div>
-                                    <button class="gallery-next">
+                                    <button class="gallery-next" aria-label="Следующая работа">
                                           →
                                     </button>
                               </div>
@@ -625,7 +626,7 @@
                                     Запишитесь на процедуру
                               </h2>
                         </div>
-                        <form class="booking-form" id="bookingForm">
+                        <form class="booking-form" id="bookingForm" novalidate>
                               <!-- Услуга -->
                               <div class="form-group">
                                     <label for="service">
@@ -651,8 +652,9 @@
                                     <label for="date">
                                           Дата
                                     </label>
-                                    <input id="date" required="" type="date" />
+                                    <input id="date" name="date" required type="date" aria-describedby="dateWarning" />
                                     <div class="date-warning" id="dateWarning" role="status" aria-live="polite"></div>
+                                    <div id="nearestSuggestion" aria-live="polite"></div>
                               </div>
                               <!-- Время -->
                               <div class="form-group">
@@ -667,21 +669,22 @@
                                     <label for="name">
                                           Ваше имя
                                     </label>
-                                    <input id="name" placeholder="Введите имя" required="" type="text" />
+                                    <input id="name" name="name" autocomplete="name" maxlength="80" placeholder="Введите имя" required type="text" />
                               </div>
                               <!-- Телефон -->
                               <div class="form-group">
                                     <label for="phone">
                                           Телефон
                                     </label>
-                                    <input autocomplete="tel" id="phone" name="phone" placeholder="+375" type="tel" />
+                                    <input autocomplete="tel" id="phone" name="phone" inputmode="tel" required placeholder="+375" type="tel" />
                               </div>
                               <!-- Telegram -->
                               <div class="form-group optional-field">
                                     <label for="telegram">
                                           Telegram <span class="optional-hint">необязательно</span>
                                     </label>
-                                    <input id="telegram" placeholder="@username" type="text" />
+                                    <input id="telegram" name="telegram" placeholder="@username" type="text" autocapitalize="none" spellcheck="false" maxlength="64" aria-describedby="telegramHelp" />
+                                    <p class="field-help" id="telegramHelp">После записи подключите бота, чтобы получать подтверждение и напоминания. Одного имени Telegram недостаточно: нужно будет нажать «Старт» в боте. Без подключения мы позвоним вам.</p>
                               </div>
                               <!-- Комментарий -->
                               <div class="form-group optional-field">
@@ -691,18 +694,28 @@
                                     <textarea id="comment" placeholder="Дополнительная информация" rows="4"></textarea>
                               </div>
                               <!-- Ошибка -->
-                              <div class="form-error" id="formError">
+                              <div class="form-error" id="formError" role="alert">
                               </div>
                               <!-- Кнопка -->
                               <button class="submit-button" type="submit">
-                                    Записаться
+                                    Проверить запись
                               </button>
                         </form>
+                        <dialog id="bookingReview" aria-labelledby="bookingReviewTitle">
+                              <h3 id="bookingReviewTitle">Проверьте заявку</h3>
+                              <div id="bookingReviewDetails"></div>
+                              <p class="field-help">После отправки мастер подтвердит запись. До отправки время не резервируется.</p>
+                              <div class="review-actions">
+                                    <button type="button" class="main-button" id="reviewSend">Отправить заявку</button>
+                                    <button type="button" class="secondary-button" id="reviewEdit">Изменить данные</button>
+                              </div>
+                        </dialog>
                         <!-- Успешная запись -->
                         <div class="booking-success" id="bookingSuccess">
                               <h3>
-                                    Запись успешно создана!
+                                    Заявка отправлена!
                               </h3>
+                              <p>Запись ожидает подтверждения мастера.</p>
                               <div id="bookingDetails">
                               </div>
                               <button class="main-button" id="newBooking" type="button">

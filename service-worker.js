@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-static-v11";
+const CACHE_NAME = "bagira-static-v12";
 
 const APP_SHELL = [
   "./",
@@ -18,6 +18,7 @@ const CACHE_FIRST = [
   ".jpg",
   ".jpeg",
   ".webp",
+  ".avif",
   ".svg",
   ".ico",
   ".woff",

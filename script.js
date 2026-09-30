@@ -15,6 +15,9 @@ const SCRIPT_URL =
 // ЭЛЕМЕНТЫ ФОРМЫ
 // ==========================================================
 
+let bookingSubmissionBusy = false;
+let busyTimesRequestVersion = 0;
+
 const bookingForm =
   document.getElementById("bookingForm");
 
@@ -370,6 +373,20 @@ function isValidPhone() {
 // ==========================================================
 
 function showError(message) {
+  const target = /услугу/i.test(message) ? serviceInput : /имя/i.test(message) ? nameInput : /телефон/i.test(message) ? phoneInput : /дату/i.test(message) ? dateInput : /время/i.test(message) ? timeList : null;
+  if (target) {
+    const group = target.closest(".form-group");
+    let error = group.querySelector(".field-error");
+    if (!error) { error = document.createElement("p"); error.className="field-error"; error.id=target.id+"Error"; group.append(error); }
+    error.textContent=message;
+    target.setAttribute("aria-invalid","true");
+    const descriptions=(target.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
+    if(!descriptions.includes(error.id)) descriptions.push(error.id);
+    target.setAttribute("aria-describedby",descriptions.join(" "));
+    if(target===timeList)target.setAttribute("tabindex","-1");
+    target.focus();
+  }
+
 
   if (!formError) {
 
@@ -393,6 +410,9 @@ function showError(message) {
 // ==========================================================
 
 function hideError() {
+  document.querySelectorAll(".field-error").forEach(item => item.textContent="");
+  bookingForm?.querySelectorAll('[aria-invalid="true"]').forEach(item => item.removeAttribute("aria-invalid"));
+
 
   if (!formError) {
 
@@ -472,7 +492,8 @@ if (timeList) {
 // ==========================================================
 
 async function loadBusyTimes() {
-
+  const requestedDate = dateInput?.value;
+  const requestVersion = ++busyTimesRequestVersion;
   try {
 
     if (!dateInput) {
@@ -482,7 +503,7 @@ async function loadBusyTimes() {
     }
 
 
-    const requestedDate = dateInput.value;
+    document.getElementById("nearestSuggestion")?.replaceChildren();
     const response =
       await fetch(
         `${SCRIPT_URL}?date=${encodeURIComponent(requestedDate)}&t=${Date.now()}`
@@ -513,7 +534,7 @@ async function loadBusyTimes() {
     }
 
 
-    if (dateInput.value !== requestedDate) return;
+    if (dateInput.value !== requestedDate || requestVersion !== busyTimesRequestVersion) return;
 
     const bookings =
       Array.isArray(
@@ -536,6 +557,7 @@ async function loadBusyTimes() {
     const selectedDate = dateInput.value;
     const daySchedule = scheduleForDate(selectedDate);
     const selectedDayIsClosed = updateDateWarning(selectedDate);
+    if(selectedDayIsClosed) offerNearestSlot(selectedDate);
     const serverToday = result.today || "";
     const serverTime = result.currentTime || "";
     if (selectedDayIsClosed) {
@@ -619,11 +641,17 @@ async function loadBusyTimes() {
         ? "На выбранную дату свободных записей нет. Пожалуйста, выберите другую дату."
         : "";
       dateWarning.style.display = noFreeTimes ? "block" : "none";
+      if(noFreeTimes) offerNearestSlot(selectedDate);
     }
 
   }
 
   catch (error) {
+    if(dateInput?.value !== requestedDate || requestVersion !== busyTimesRequestVersion) return;
+    timeButtons.forEach(button => {button.disabled=true;button.classList.remove("selected");});
+    if(selectedTimeInput) selectedTimeInput.value="";
+    if(dateWarning) {dateWarning.textContent="Не удалось загрузить свободное время. Проверьте подключение и выберите дату ещё раз.";dateWarning.style.display="block";}
+
 
     console.error(
       "Ошибка загрузки записей:",
@@ -944,8 +972,12 @@ if (bookingForm) {
     async function (event) {
 
       event.preventDefault();
-
-
+      if (bookingSubmissionBusy) return;
+      bookingSubmissionBusy=true;
+      bookingForm.setAttribute("aria-busy","true");
+      const actionButton=bookingForm.querySelector('button[type="submit"]');
+      actionButton.disabled=true;actionButton.textContent="Проверяем время…";
+      try {
       hideError();
 
 
@@ -1206,6 +1238,8 @@ if (bookingForm) {
       };
 
 
+      if (!await reviewBooking(booking)) return;
+
       // ====================================================
       // БЛОКИРУЕМ КНОПКУ
       // ====================================================
@@ -1362,6 +1396,10 @@ if (bookingForm) {
 
       }
 
+      } finally {
+        bookingSubmissionBusy=false;bookingForm.removeAttribute("aria-busy");
+        actionButton.disabled=false;actionButton.textContent="Проверить запись";
+      }
     }
   );
 
@@ -2513,3 +2551,46 @@ document.addEventListener("DOMContentLoaded", () => {
   );
 
 });
+
+// Предложение проверяется ещё раз при выборе, поскольку окно мог занять другой клиент.
+let nearestSuggestionVersion=0;
+async function offerNearestSlot(forDate) {
+  const host=document.getElementById("nearestSuggestion");
+  if(!host)return;
+  const version=++nearestSuggestionVersion;
+  try {
+    const response=await fetch(`${SCRIPT_URL}?availability=1&t=${Date.now()}`);
+    if(!response.ok)return;
+    const result=await response.json();
+    if(version!==nearestSuggestionVersion || dateInput.value!==forDate || !result.success)return;
+    host.replaceChildren();
+    const slot=(result.slots || []).find(item=>item.date!==forDate);
+    if(!slot) {host.textContent="В периоде записи свободных окон пока нет.";return;}
+    const button=document.createElement("button");button.type="button";button.className="nearest-slot-button";
+    button.textContent="Ближайшее окно — "+formatDateForDisplay(slot.date)+", "+slot.time;
+    button.addEventListener("click",async()=>{
+      button.disabled=true;dateInput.value=slot.date;selectedTimeInput.value="";renderTimeButtons(slot.date);
+      timeButtons.forEach(item=>item.disabled=true);
+      await loadBusyTimes();
+      if(dateInput.value!==slot.date)return;
+      const available=timeButtons.find(item=>item.dataset.time===slot.time && !item.disabled);
+      if(available) {available.click();available.focus();}
+      else showError("Это время уже недоступно. Выберите другое.");
+    });
+    host.append(button);
+  } catch(error) { /* Не мешаем вручную выбрать другую дату. */ }
+}
+function reviewBooking(booking) {
+  const dialog=document.getElementById("bookingReview"),details=document.getElementById("bookingReviewDetails");
+  details.replaceChildren();
+  [["Услуга",booking.service],["Дата",formatDateForDisplay(booking.date)],["Время",booking.time],["Имя",booking.name],["Телефон",booking.phone],["Telegram",booking.telegram || "Не указан — свяжемся по телефону"],["Комментарий",booking.comment || "—"]].forEach(([label,value])=>{
+    const row=document.createElement("p"),title=document.createElement("strong");title.textContent=label+": ";row.append(title,document.createTextNode(value));details.append(row);
+  });
+  return new Promise(resolve=>{
+    let confirmed=false;
+    const send=()=>{confirmed=true;dialog.close();},edit=()=>dialog.close();
+    const finish=()=>{document.getElementById("reviewSend").removeEventListener("click",send);document.getElementById("reviewEdit").removeEventListener("click",edit);resolve(confirmed);};
+    document.getElementById("reviewSend").addEventListener("click",send);document.getElementById("reviewEdit").addEventListener("click",edit);dialog.addEventListener("close",finish,{once:true});
+    dialog.showModal();document.getElementById("reviewEdit").focus();
+  });
+}
