@@ -544,7 +544,7 @@ function getBookings(sheet) {
 // СОЗДАНИЕ ЗАПИСИ С САЙТА
 // ============================================================
 
-function createBooking(data, clientChatId) {
+function createBooking(data, clientChatId, draftToken, draftVersion) {
 
   const lock =
     LockService.getScriptLock();
@@ -554,6 +554,16 @@ function createBooking(data, clientChatId) {
 
 
   try {
+    let clientDraft;
+    if (draftToken) {
+      clientDraft = getClientBotState(clientChatId);
+      if (clientDraft.token !== draftToken || String(clientDraft.version) !== String(draftVersion) || !["review","saved"].includes(clientDraft.step)) return {success:false,error:"Кнопка устарела. Начните запись заново."};
+      const existing = findBookingById(clientDraft.bookingId);
+      if (existing) return {success:true,id:existing.id};
+      if (clientDraft.expiresAt < Date.now()) return {success:false,error:"Время заполнения истекло. Начните запись заново."};
+      data = {name:clientDraft.name,phone:clientDraft.phone,service:clientDraft.service,date:clientDraft.date,time:clientDraft.time,telegram:data.telegram,comment:"Запись через Telegram"};
+    }
+
 
     // --------------------------------------------------------
     // Проверка обязательных полей
@@ -647,7 +657,7 @@ function createBooking(data, clientChatId) {
     // --------------------------------------------------------
 
     const id =
-      Utilities.getUuid();
+      clientDraft ? clientDraft.bookingId : Utilities.getUuid();
 
 
     // --------------------------------------------------------
@@ -2768,116 +2778,110 @@ function formatDateForTelegram(date) {
 }
 
 function handleClientTelegramMessage(message, event) {
-  if (!checkTelegramWebhookAccess(event)) return { success: false, error: "Webhook access denied" };
-  const chatId = String(message && message.chat && message.chat.id || "");
-  if (!chatId || String(message.chat.type || "") !== "private") return { success: true };
-  const text = String(message.text || "").trim();
-  const linkMatch = text.match(/^\/start(?:@BagiraMasterBot)? booking_([a-f0-9]{32})$/i);
-  if (linkMatch) return connectWebsiteBooking(chatId, linkMatch[1]);
-  const state = getClientBotState(chatId);
-
-  if (text === "/start" || text === "/menu" || text === "Отмена") {
-    clearClientBotState(chatId);
-    clientBotMenu(chatId, "Здравствуйте! Я помогу выбрать свободное время и отправлю статус вашей записи.");
-    return { success: true };
-  }
-  if (text === "📝 Записаться" || text === "🕐 Ближайшие окна" || text === "/book" || text === "/slots") {
-    sendClientNearestSlots(chatId, text === "📝 Записаться" ? "Выберите удобное время:" : "Ближайшие свободные окна:");
-    return { success: true };
-  }
-  if (text === "📋 Мои записи" || text === "/bookings") {
-    sendClientBookings(chatId);
-    return { success: true };
-  }
-  if (state.step === "name") {
-    if (!text || text.length > 80) {
-      sendClientBotMessage(chatId, "Введите имя — до 80 символов.");
-      return { success: true };
-    }
-    state.name = text;
-    state.step = "phone";
-    setClientBotState(chatId, state);
-    sendClientBotMessage(chatId, "Отправьте номер телефона текстом или кнопкой ниже.", {
-      reply_markup: { keyboard: [[{ text: "📱 Отправить номер", request_contact: true }], ["Отмена"]], resize_keyboard: true, one_time_keyboard: true }
-    });
-    return { success: true };
-  }
-  if (state.step === "phone") {
-    const phone = String(message.contact && message.contact.phone_number || text).trim();
-    if (!phone || phone.length < 5 || phone.length > 30) {
-      sendClientBotMessage(chatId, "Введите корректный номер телефона.");
-      return { success: true };
-    }
-    createClientTelegramBooking(chatId, message.from || {}, state, phone);
-    return { success: true };
-  }
-  clientBotMenu(chatId, "Выберите действие с помощью кнопок.");
-  return { success: true };
-}
-
-function handleClientTelegramCallback(callback, event) {
-  if (!checkTelegramWebhookAccess(event)) {
-    answerTelegramCallback(callback.id, "Не удалось проверить запрос.", true);
-    return { success: false, error: "Webhook access denied" };
-  }
-  if (isTelegramStaff(callback.from, callback.message && callback.message.chat)) {
-    answerTelegramCallback(callback.id, "Открываю рабочее меню");
-    staffBotMenu(String(callback.message.chat.id));
-    return { success: true };
-  }
-  const chatId = String(callback.message && callback.message.chat && callback.message.chat.id || "");
-  const data = String(callback.data || "");
-  if (!chatId) return { success: false, error: "Chat not found" };
-
-  if (data === "client_cancel") {
-    clearClientBotState(chatId);
-    answerTelegramCallback(callback.id, "Запись отменена");
-    clientBotMenu(chatId, "Выберите действие:");
-    return { success: true };
-  }
-  if (data === "client_slots") {
-    answerTelegramCallback(callback.id, "Загружаю окна…");
-    sendClientNearestSlots(chatId, "Ближайшие свободные окна:");
-    return { success: true };
-  }
-  const slotMatch = data.match(/^client_slot:(\d{8}):(\d{4})$/);
-  if (slotMatch) {
-    const date = slotMatch[1].slice(0, 4) + "-" + slotMatch[1].slice(4, 6) + "-" + slotMatch[1].slice(6, 8);
-    const time = slotMatch[2].slice(0, 2) + ":" + slotMatch[2].slice(2, 4);
-    const availability = getNearestAvailability(getSheet());
-    const available = availability.slots.some(function(slot) { return slot.date === date && slot.time === time; });
-    if (!available) {
-      answerTelegramCallback(callback.id, "Это окно уже занято.", true);
-      sendClientNearestSlots(chatId, "Выберите другое свободное время:");
-      return { success: true };
-    }
-    setClientBotState(chatId, { step: "service", date: date, time: time });
-    answerTelegramCallback(callback.id, "Время выбрано");
-    sendClientBotMessage(chatId, "Выберите услугу:", {
-      reply_markup: { inline_keyboard: CLIENT_BOT_SERVICES.map(function(service, index) {
-        return [{ text: service, callback_data: "client_service:" + index }];
-      }).concat([[{ text: "Отмена", callback_data: "client_cancel" }]]) }
-    });
-    return { success: true };
-  }
-  const serviceMatch = data.match(/^client_service:(\d)$/);
-  if (serviceMatch) {
+  if (!checkTelegramWebhookAccess(event)) return {success:false,error:"Webhook access denied"};
+  if (!message.chat || message.chat.type !== "private") return {success:true};
+  const chatId = String(message.chat.id), text = String(message.text || "").trim();
+  const link = text.match(/^\/start(?:@BagiraMasterBot)? booking_([a-f0-9]{32})$/i);
+  if (link) return connectWebsiteBooking(chatId,link[1]);
+  if (["/start","/menu","Отмена"].includes(text)) { clearClientBotState(chatId); clientBotMenu(chatId); return {success:true}; }
+  if (["📝 Записаться","/book"].includes(text)) { startClientWizard(chatId); return {success:true}; }
+  if (["🕐 Ближайшие окна","/slots"].includes(text)) { sendClientNearestSlots(chatId,"Ближайшие свободные окна:"); return {success:true}; }
+  if (["📋 Мои записи","/bookings"].includes(text)) { clearClientBotState(chatId); sendClientBookings(chatId); return {success:true}; }
+  withBookingLock(function() {
     const state = getClientBotState(chatId);
-    const service = CLIENT_BOT_SERVICES[Number(serviceMatch[1])];
-    if (!state.date || !state.time || !service) {
-      answerTelegramCallback(callback.id, "Начните запись заново.", true);
-      clientBotMenu(chatId, "Выберите действие:");
-      return { success: true };
+    if (!state.token || state.step === "saved" || state.expiresAt < Date.now()) { clientBotMenu(chatId,"Начните новую запись кнопкой «Записаться»."); return; }
+    if (text === "Назад") { clientWizardBack(state); }
+    else if (state.step === "name") {
+      if (!validStaffClientName(text)) { sendClientBotMessage(chatId,"Введите имя от 2 до 80 символов."); return; }
+      state.name=text; state.step="phone";
+    } else if (state.step === "phone") {
+      if (message.contact && String(message.contact.user_id) !== String(message.from.id)) { sendClientBotMessage(chatId,"Отправьте свой контакт или введите номер текстом."); return; }
+      const phone=normalizeStaffClientPhone(message.contact ? message.contact.phone_number : text);
+      if (!phone) { sendClientBotMessage(chatId,"Введите номер телефона с кодом страны, например +375291234567."); return; }
+      state.phone=phone; state.step="review";
     }
-    state.service = service;
-    state.step = "name";
-    setClientBotState(chatId, state);
-    answerTelegramCallback(callback.id, "Услуга выбрана");
-    sendClientBotMessage(chatId, "Как к вам обращаться?");
-    return { success: true };
+    setClientBotState(chatId,state); renderClientWizard(chatId,state);
+  });
+  return {success:true};
+}
+function handleClientTelegramCallback(callback,event) {
+  if (!checkTelegramWebhookAccess(event)) return {success:false,error:"Webhook access denied"};
+  const chat=callback.message && callback.message.chat;
+  if (!chat || chat.type!=="private" || String(chat.id)!==String(callback.from.id)) return {success:false,error:"Access denied"};
+  const chatId=String(chat.id), data=String(callback.data||"");
+  if (isTelegramStaff(callback.from,chat)) { answerTelegramCallback(callback.id,"Рабочее меню"); staffBotMenu(chatId); return {success:true}; }
+  // Старые кнопки ближайших окон открывают новый сценарий, без скрытого выбора времени.
+  if (/^client_(slot:|slots$|service:|cancel$)/.test(data)) { answerTelegramCallback(callback.id,"Выберите услугу и дату"); startClientWizard(chatId); return {success:true}; }
+  const match=data.match(/^client_w:([a-f0-9]{16}):(\d+):([a-z]+)(?::([\d-]+))?$/);
+  if (!match) { answerTelegramCallback(callback.id,"Кнопка устарела",true); return {success:false}; }
+  if (match[3]==="save") {
+    const state=getClientBotState(chatId);
+    if (state.token!==match[1] || String(state.version)!==match[2] || !["review","saved"].includes(state.step)) { answerTelegramCallback(callback.id,"Кнопка устарела",true); return {success:false}; }
+    let result;
+    try { result=createBooking({telegram:callback.from.username ? "@"+callback.from.username : ""},chatId,state.token,state.version); }
+    catch (error) { const existing=findBookingById(state.bookingId); result=existing ? {success:true,id:existing.id} : {success:false,error:"Не удалось сохранить запись. Попробуйте ещё раз."}; }
+    answerStaffSavedAction(callback.id,result,"Заявка принята");
+    if (result.success) {
+      try {
+        withBookingLock(function() { const latest=getClientBotState(chatId); if(latest.token===state.token) { latest.step="saved"; setClientBotState(chatId,latest); } });
+        clientBotMenu(chatId,"✅ Заявка принята. Мастер подтвердит запись.\n"+escapeTelegram(state.service)+"\n"+staffDateLabel(state.date)+" в "+state.time);
+      } catch (error) { console.error("Заявка сохранена, ответ клиенту не доставлен"); }
+    }
+    return result;
   }
-  answerTelegramCallback(callback.id, "Неизвестная команда.", true);
-  return { success: false, error: "Unknown client command" };
+  return withBookingLock(function() {
+    const state=getClientBotState(chatId);
+    if(state.token!==match[1] || String(state.version)!==match[2] || state.expiresAt<Date.now() || state.step==="saved") { answerTelegramCallback(callback.id,"Кнопка устарела. Откройте последнюю карточку.",true); return {success:false}; }
+    const action=match[3],value=match[4];
+    if(action==="cancel") { clearClientBotState(chatId); answerTelegramCallback(callback.id,"Заполнение отменено"); clientBotMenu(chatId); return {success:true}; }
+    if(action==="back") clientWizardBack(state);
+    else if(action==="service" && state.step==="service" && CLIENT_BOT_SERVICES[Number(value)]) { state.service=CLIENT_BOT_SERVICES[Number(value)];state.step="date"; }
+    else if(action==="month" && state.step==="date" && /^\d{4}-\d{2}$/.test(value) && value>=getDateAfterDays(0).slice(0,7) && value<=getDateAfterDays(getScheduleSettings().bookingDays).slice(0,7)) state.month=value;
+    else if(action==="date" && state.step==="date" && staffFreeTimes(value,null,getBookings(getSheet())).length) {state.date=value;state.step="time";}
+    else if(action==="time" && state.step==="time" && /^\d{4}$/.test(value) && staffFreeTimes(state.date,null,getBookings(getSheet())).includes(value.slice(0,2)+":"+value.slice(2))) {state.time=value.slice(0,2)+":"+value.slice(2);state.step="name";}
+    else {answerTelegramCallback(callback.id,"Выберите доступное время в новой карточке",true);renderClientWizard(chatId,state);return {success:false};}
+    setClientBotState(chatId,state);answerTelegramCallback(callback.id,"Готово");renderClientWizard(chatId,state);return {success:true};
+  });
+}
+function startClientWizard(chatId) {
+  withBookingLock(function() {
+    const state={token:Utilities.getUuid().replace(/-/g,"").slice(0,16),bookingId:Utilities.getUuid(),version:0,step:"service",month:getDateAfterDays(0).slice(0,7),expiresAt:Date.now()+1800000};
+    setClientBotState(chatId,state);renderClientWizard(chatId,state);
+  });
+}
+function clientWizardBack(state) {
+  state.step={date:"service",time:"date",name:"time",phone:"name",review:"phone"}[state.step] || "service";
+}
+function renderClientWizard(chatId,state) {
+  state.version=(state.version||0)+1;setClientBotState(chatId,state);
+  const button=(text,action,value)=>({text:text,callback_data:"client_w:"+state.token+":"+state.version+":"+action+(value===undefined ? "" : ":"+value)});
+  let text="",rows=[];
+  if(state.step==="service") {text="Выберите услугу:";rows=CLIENT_BOT_SERVICES.map((name,i)=>[button(name,"service",i)]);}
+  if(state.step==="date") {
+    text="Выберите дату. Показаны дни со свободным временем.\n"+state.month;
+    const first=state.month+"-01",end=staffDateShift(first,32).slice(0,7)+"-01",bookings=getBookings(getSheet());
+    let row=[];
+    for(let date=first;date<end;date=staffDateShift(date,1)) {
+      if(staffFreeTimes(date,null,bookings).length) row.push(button(staffDateLabel(date),"date",date));
+      if(row.length===3) {rows.push(row);row=[];}
+    }
+    if(row.length)rows.push(row);
+    if(!rows.length)text+="\nВ этом месяце свободных дней нет.";
+    const nav=[];const prev=staffDateShift(first,-1).slice(0,7),next=end.slice(0,7);
+    if(prev>=getDateAfterDays(0).slice(0,7))nav.push(button("‹ Месяц","month",prev));
+    if(next<=getDateAfterDays(getScheduleSettings().bookingDays).slice(0,7))nav.push(button("Месяц ›","month",next));
+    if(nav.length)rows.push(nav);
+  }
+  if(state.step==="time") {text="Свободное время на "+staffDateLabel(state.date)+":";rows=staffFreeTimes(state.date,null,getBookings(getSheet())).map(time=>[button(time,"time",time.replace(":",""))]);if(!rows.length)text+="\nСвободных окон нет. Вернитесь к выбору даты.";}
+  if(state.step==="name" || state.step==="phone") {
+    sendClientBotMessage(chatId,state.step==="name" ? "Как к вам обращаться?" : "Введите номер с кодом страны или отправьте свой контакт.",{reply_markup:{keyboard:(state.step==="phone" ? [[{text:"📱 Отправить номер",request_contact:true}]] : []).concat([["Назад","Отмена"]]),resize_keyboard:true}});return;
+  }
+  if(state.step==="review") {
+    text="<b>Проверьте запись</b>\n💅 "+escapeTelegram(state.service)+"\n📅 "+staffDateLabel(state.date)+" в "+state.time+"\n👤 "+escapeTelegram(state.name)+"\n📞 "+escapeTelegram(state.phone)+"\nВремя будет проверено повторно при подтверждении.";
+    rows.push([button("✅ Подтвердить заявку","save")]);
+  }
+  if(state.step!=="service")rows.push([button(state.step==="review" ? "Изменить / Назад" : "Назад","back")]);
+  rows.push([button("Отмена","cancel")]);sendClientBotMessage(chatId,text,{reply_markup:{inline_keyboard:rows}});
 }
 
 function sendClientNearestSlots(chatId, title) {
