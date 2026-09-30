@@ -770,6 +770,19 @@
       .admin-sticky-header {padding:12px 10px;}
       .admin-sticky-header h1 {font-size:22px;}
     }
+    body {padding:0;}
+    #adminApp > .container {padding:16px 20px;max-width:940px;}
+    .admin-sticky-header {width:100%;margin:0;padding:12px 0;border-radius:0;}
+    .admin-sticky-header h1 {padding:0 80px;margin:0 0 12px;}
+    .admin-sticky-header .logout-button {position:absolute;top:4px;right:8px;margin:0;padding:10px;min-height:44px;color:white;font-size:14px;}
+    .admin-sticky-header .date-buttons,.admin-sticky-header .summary {max-width:900px;width:calc(100% - 24px);margin-left:auto;margin-right:auto;}
+    .admin-sticky-header .summary {margin-top:10px;margin-bottom:0;}
+    .admin-sticky-header .summary-box {padding:8px 6px;box-shadow:none;}
+    html {scroll-padding-top:220px;}
+    @media(max-width:600px){
+      #adminApp > .container {padding:12px 10px;}
+      .admin-sticky-header h1 {font-size:20px;min-height:44px;display:flex;justify-content:center;align-items:center;padding:0 68px;}
+    }
   </style>
 
 </head>
@@ -793,11 +806,11 @@
   </div>
 
   <div id="adminApp">
-    <div class="container">
 
 
       <header class="admin-sticky-header">
         <h1>Админ-панель «Багира»</h1>
+      <button type="button" id="logoutButton" class="logout-button">Выйти</button>
         <div class="date-buttons">
 
 
@@ -817,8 +830,44 @@
 
 
         </div>
+        <div class="summary">
+
+        <div class="summary-box summary-active">
+          <span class="summary-number" id="activeCount">
+            0
+          </span>
+
+          <span class="summary-title">
+            Записей на день
+          </span>
+        </div>
+
+
+        <div class="summary-box summary-free">
+          <span class="summary-number" id="freeCount">
+            0
+          </span>
+
+          <span class="summary-title">
+            Свободных мест
+          </span>
+        </div>
+
+
+        <div class="summary-box summary-total">
+          <span class="summary-number" id="totalCount">
+            9
+          </span>
+
+          <span class="summary-title">
+            Всего мест
+          </span>
+        </div>
+
+      </div>
       </header>
-      <button type="button" id="logoutButton" class="logout-button">Выйти</button>
+    <div class="container">
+
 
 
       <section class="workbench-panel" aria-label="Рабочий день">
@@ -893,43 +942,6 @@
       <!-- =========================
        СТАТИСТИКА
   ========================== -->
-
-      <div class="summary">
-
-        <div class="summary-box summary-active">
-          <span class="summary-number" id="activeCount">
-            0
-          </span>
-
-          <span class="summary-title">
-            Записей на день
-          </span>
-        </div>
-
-
-        <div class="summary-box summary-free">
-          <span class="summary-number" id="freeCount">
-            0
-          </span>
-
-          <span class="summary-title">
-            Свободных мест
-          </span>
-        </div>
-
-
-        <div class="summary-box summary-total">
-          <span class="summary-number" id="totalCount">
-            9
-          </span>
-
-          <span class="summary-title">
-            Всего мест
-          </span>
-        </div>
-
-      </div>
-
 
       <!-- =========================
        ОШИБКА
