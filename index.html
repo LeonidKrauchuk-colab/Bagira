@@ -627,6 +627,8 @@
                               </h2>
                         </div>
                         <form class="booking-form" id="bookingForm" novalidate>
+                              <p id="draftNotice" class="field-help" role="status"></p>
+                              <p class="field-help">Незавершённая заявка сохраняется на этом устройстве на 24 часа. <button type="button" class="draft-clear" id="clearDraft">Очистить форму</button></p>
                               <!-- Услуга -->
                               <div class="form-group">
                                     <label for="service">
@@ -655,6 +657,7 @@
                                     <input id="date" name="date" required type="date" aria-describedby="dateWarning" />
                                     <div class="date-warning" id="dateWarning" role="status" aria-live="polite"></div>
                                     <div id="nearestSuggestion" aria-live="polite"></div>
+                                    <div id="bookingCalendar" aria-label="Календарь свободных дат" aria-live="polite"></div>
                               </div>
                               <!-- Время -->
                               <div class="form-group">

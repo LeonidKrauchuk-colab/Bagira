@@ -16,6 +16,7 @@ const SCRIPT_URL =
 // ==========================================================
 
 let bookingSubmissionBusy = false;
+let pendingWebsiteBooking = null;
 let busyTimesRequestVersion = 0;
 
 const bookingForm =
@@ -492,6 +493,7 @@ if (timeList) {
 // ==========================================================
 
 async function loadBusyTimes() {
+  if(pendingWebsiteBooking) return;
   const requestedDate = dateInput?.value;
   const requestVersion = ++busyTimesRequestVersion;
   try {
@@ -534,7 +536,7 @@ async function loadBusyTimes() {
     }
 
 
-    if (dateInput.value !== requestedDate || requestVersion !== busyTimesRequestVersion) return;
+    if (pendingWebsiteBooking || dateInput.value !== requestedDate || requestVersion !== busyTimesRequestVersion) return;
 
     const bookings =
       Array.isArray(
@@ -550,7 +552,7 @@ async function loadBusyTimes() {
       scheduleSettings = { ...scheduleSettings, ...result.scheduleSettings };
       if (JSON.stringify(scheduleSettings) !== previousSettings) {
         renderTimeButtons(dateInput.value);
-        if (selectedTimeInput) selectedTimeInput.value = "";
+        if (selectedTimeInput && !timeButtons.some(button=>button.dataset.time===selectedTimeInput.value)) selectedTimeInput.value = "";
       }
     }
     setBookingDateLimit(result.today || new Date().toISOString().slice(0, 10));
@@ -610,6 +612,7 @@ async function loadBusyTimes() {
           button.classList.remove(
             "busy"
           );
+          button.classList.toggle("selected",selectedTimeInput?.value === time);
 
         }
 
@@ -979,7 +982,7 @@ if (bookingForm) {
       actionButton.disabled=true;actionButton.textContent="Проверяем время…";
       try {
       hideError();
-
+      if (!pendingWebsiteBooking) {
 
       // ----------------------------------------------------
       // ПРОВЕРКА УСЛУГИ
@@ -1205,7 +1208,8 @@ if (bookingForm) {
       // ФОРМИРУЕМ ЗАПИСЬ
       // ====================================================
 
-      const booking = {
+      }
+      const booking = pendingWebsiteBooking || {
 
         action:
           "createBooking",
@@ -1238,7 +1242,13 @@ if (bookingForm) {
       };
 
 
-      if (!await reviewBooking(booking)) return;
+      if (!pendingWebsiteBooking) {
+        if (!await reviewBooking(booking)) return;
+        booking.requestId=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
+        pendingWebsiteBooking=booking;
+        saveWebsiteDraft();
+        lockPendingWebsiteBooking(true);
+      }
 
       // ====================================================
       // БЛОКИРУЕМ КНОПКУ
@@ -1278,8 +1288,11 @@ if (bookingForm) {
         if (!response.ok) throw new Error("Ошибка отправки записи. Попробуйте ещё раз.");
         const result = await response.json();
         if (result.success !== true || !result.id) {
+          if(result.code === "BOOKING_REJECTED") {pendingWebsiteBooking=null;lockPendingWebsiteBooking(false);saveWebsiteDraft();}
           throw new Error(result.error || "Сервер не подтвердил создание записи.");
         }
+
+        pendingWebsiteBooking=null;lockPendingWebsiteBooking(false);clearWebsiteDraft();
 
         // ==================================================
         // ПОКАЗ УСПЕШНОГО СООБЩЕНИЯ
@@ -1375,7 +1388,7 @@ if (bookingForm) {
 
 
         showError(
-          error.message || "Не удалось отправить запись. Попробуйте ещё раз."
+          pendingWebsiteBooking ? "Не удалось получить ответ. Нажмите «Проверить отправку»: повторная запись не создастся." : error.message || "Не удалось отправить запись. Попробуйте ещё раз."
         );
 
       }
@@ -1398,7 +1411,7 @@ if (bookingForm) {
 
       } finally {
         bookingSubmissionBusy=false;bookingForm.removeAttribute("aria-busy");
-        actionButton.disabled=false;actionButton.textContent="Проверить запись";
+        actionButton.disabled=false;actionButton.textContent=pendingWebsiteBooking ? "Проверить отправку" : "Проверить запись";
       }
     }
   );
@@ -2558,17 +2571,19 @@ async function offerNearestSlot(forDate) {
   const host=document.getElementById("nearestSuggestion");
   if(!host)return;
   const version=++nearestSuggestionVersion;
+  if(pendingWebsiteBooking)return;
   try {
     const response=await fetch(`${SCRIPT_URL}?availability=1&t=${Date.now()}`);
     if(!response.ok)return;
     const result=await response.json();
-    if(version!==nearestSuggestionVersion || dateInput.value!==forDate || !result.success)return;
+    if(pendingWebsiteBooking || version!==nearestSuggestionVersion || dateInput.value!==forDate || !result.success)return;
     host.replaceChildren();
     const slot=(result.slots || []).find(item=>item.date!==forDate);
     if(!slot) {host.textContent="В периоде записи свободных окон пока нет.";return;}
     const button=document.createElement("button");button.type="button";button.className="nearest-slot-button";
     button.textContent="Ближайшее окно — "+formatDateForDisplay(slot.date)+", "+slot.time;
     button.addEventListener("click",async()=>{
+      if(pendingWebsiteBooking)return;
       button.disabled=true;dateInput.value=slot.date;selectedTimeInput.value="";renderTimeButtons(slot.date);
       timeButtons.forEach(item=>item.disabled=true);
       await loadBusyTimes();
@@ -2594,3 +2609,81 @@ function reviewBooking(booking) {
     dialog.showModal();document.getElementById("reviewEdit").focus();
   });
 }
+
+const WEBSITE_DRAFT_KEY="bagira-booking-draft-v1";
+function websiteDraftValues() {
+  return Object.fromEntries(["service","date","selectedTime","name","phone","telegram","comment"].map(id=>[id,document.getElementById(id)?.value || ""]));
+}
+function saveWebsiteDraft() {
+  try {localStorage.setItem(WEBSITE_DRAFT_KEY,JSON.stringify({values:websiteDraftValues(),pending:pendingWebsiteBooking,savedAt:Date.now()}));}catch(error){}
+}
+function clearWebsiteDraft() {try{localStorage.removeItem(WEBSITE_DRAFT_KEY);}catch(error){}}
+function lockPendingWebsiteBooking(locked) {
+  bookingForm?.querySelectorAll("input,select,textarea").forEach(el=>el.disabled=locked);
+  if(locked) bookingForm?.querySelectorAll(".time-button,#bookingCalendar button,.nearest-slot-button").forEach(el=>el.disabled=true);
+  else {loadBusyTimes();loadBookingCalendar();}
+  const notice=document.getElementById("draftNotice");
+  if(notice && !locked)notice.textContent="";
+  if(notice && locked)notice.textContent="Проверяем отправленную заявку. Данные сохранены до получения ответа.";
+}
+function restoreWebsiteDraft() {
+  try {
+    const saved=JSON.parse(localStorage.getItem(WEBSITE_DRAFT_KEY)||"null");
+    if(!saved)return;
+    if(!saved.pending && Date.now()-saved.savedAt>86400000){clearWebsiteDraft();return;}
+    for(const [id,value] of Object.entries(saved.values||{})) {
+      if(["service","date","selectedTime","name","phone","telegram","comment"].includes(id) && typeof value==="string")document.getElementById(id).value=value;
+    }
+    pendingWebsiteBooking=saved.pending || null;
+    if(pendingWebsiteBooking) {
+      for(const [id,key] of [["service","service"],["date","date"],["selectedTime","time"],["name","name"],["phone","phone"],["telegram","telegram"],["comment","comment"]])document.getElementById(id).value=pendingWebsiteBooking[key] || "";
+    }
+    renderTimeButtons(dateInput.value);
+    document.getElementById("draftNotice").textContent="Восстановлена незавершённая заявка. Свободность времени проверяется заново.";
+    if(pendingWebsiteBooking){lockPendingWebsiteBooking(true);bookingForm.querySelector('[type="submit"]').textContent="Проверить отправку";}
+    else loadBusyTimes();
+  }catch(error){clearWebsiteDraft();}
+}
+async function loadBookingCalendar() {
+  const host=document.getElementById("bookingCalendar");if(!host)return;
+  host.textContent="Загружаем доступные даты…";
+  try {
+    const response=await fetch(`${SCRIPT_URL}?calendar=1&t=${Date.now()}`),result=await response.json();
+    if(!response.ok || !result.success || !Array.isArray(result.days))throw Error();
+    host.replaceChildren();
+    dateInput.readOnly=true;
+    const title=document.createElement("p");title.className="field-help";title.textContent="Выберите свободный день. Недоступные даты неактивны.";host.append(title);
+    const months=[...new Set(result.days.map(d=>d.date.slice(0,7)))];let monthIndex=0;
+    const nav=document.createElement("div"),grid=document.createElement("div");nav.className="calendar-nav";grid.className="calendar-grid";host.append(nav,grid);
+    function render() {
+      nav.replaceChildren();grid.replaceChildren();
+      const prev=document.createElement("button"),next=document.createElement("button"),label=document.createElement("strong");
+      prev.type=next.type="button";prev.textContent="‹";next.textContent="›";prev.setAttribute("aria-label","Предыдущий месяц");next.setAttribute("aria-label","Следующий месяц");
+      prev.disabled=monthIndex===0;next.disabled=monthIndex===months.length-1;
+      label.textContent=new Date(months[monthIndex]+"-01T12:00:00").toLocaleDateString("ru-RU",{month:"long",year:"numeric"});nav.append(prev,label,next);
+      prev.onclick=()=>{monthIndex--;render();};next.onclick=()=>{monthIndex++;render();};
+      ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].forEach(day=>{const cell=document.createElement("span");cell.textContent=day;grid.append(cell);});
+      const first=months[monthIndex]+"-01",start=new Date(first+"T12:00:00");
+      for(let i=0;i<(start.getDay()+6)%7;i++)grid.append(document.createElement("span"));
+      const count=new Date(start.getFullYear(),start.getMonth()+1,0).getDate();
+      for(let n=1;n<=count;n++) {
+        const date=months[monthIndex]+"-"+String(n).padStart(2,"0"),day=result.days.find(d=>d.date===date),button=document.createElement("button");
+        button.type="button";button.textContent=String(n);button.disabled=!day?.available || Boolean(pendingWebsiteBooking);button.setAttribute("aria-label",formatDateForDisplay(date)+(day?.available ? " — есть свободное время" : " — недоступно"));button.setAttribute("aria-pressed",String(dateInput.value===date));
+        button.onclick=()=>{dateInput.value=date;dateInput.dispatchEvent(new Event("change",{bubbles:true}));render();};grid.append(button);
+      }
+    }
+    const selected=months.indexOf(dateInput.value.slice(0,7));if(selected>=0)monthIndex=selected;render();
+  }catch(error){dateInput.readOnly=false;host.textContent="Календарь временно недоступен. Выберите дату в поле выше.";}
+}
+if(bookingForm) {
+  bookingForm.addEventListener("input",saveWebsiteDraft);
+  bookingForm.addEventListener("change",saveWebsiteDraft);
+  timeList?.addEventListener("click",saveWebsiteDraft);
+  restoreWebsiteDraft();loadBookingCalendar();
+  newBookingButton?.addEventListener("click",()=>{pendingWebsiteBooking=null;clearWebsiteDraft();document.getElementById("draftNotice").textContent="";loadBookingCalendar();});
+}
+
+document.getElementById("clearDraft")?.addEventListener("click",()=>{
+  if(pendingWebsiteBooking || bookingSubmissionBusy) {showError("Сначала проверьте отправку заявки, чтобы не создать повторную запись.");return;}
+  bookingForm.reset();selectedTimeInput.value="";dateInput.value=bookingDateMin;renderTimeButtons();clearWebsiteDraft();document.getElementById("draftNotice").textContent="Форма очищена.";loadBusyTimes();loadBookingCalendar();
+});

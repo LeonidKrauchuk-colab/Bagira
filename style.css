@@ -3229,3 +3229,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 button:disabled {cursor:wait;}
 .time-button:disabled {cursor:not-allowed;}
 @media (prefers-reduced-motion:reduce) {html {scroll-behavior:auto;} *,*::before,*::after {animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+
+.calendar-nav {display:flex;align-items:center;justify-content:space-between;margin:12px 0;gap:8px;}
+.calendar-nav button,.calendar-grid button {border:1px solid #c9adb4;border-radius:10px;background:#fff;color:#56343d;font:inherit;min-height:44px;cursor:pointer;}
+.calendar-nav button {min-width:44px;}
+.calendar-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center;}
+.calendar-grid span {font-size:12px;color:#66535b;}
+.calendar-grid button:disabled {background:#eee;color:#888;border-color:#eee;cursor:not-allowed;}
+.calendar-grid button[aria-pressed="true"] {background:#81565d;color:white;}
+
+.draft-clear {font:inherit;color:#56343d;background:none;border:0;text-decoration:underline;cursor:pointer;padding:6px;}

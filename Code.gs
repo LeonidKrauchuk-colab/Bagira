@@ -54,6 +54,14 @@ function doGet(e) {
     }
 
     const sheet = getSheet();
+    if (String(e && e.parameter && e.parameter.calendar || "") === "1") {
+      const settings=getScheduleSettings(), rows=getBookings(sheet), days=[];
+      for(let n=0;n<=Math.min(365,settings.bookingDays);n++) {
+        const date=getDateAfterDays(n);
+        days.push({date:date,available:staffFreeTimes(date,null,rows).length>0});
+      }
+      return jsonResponse({success:true,days:days});
+    }
     const availabilityRequested = String(e && e.parameter && e.parameter.availability || "") === "1";
     if (availabilityRequested) {
       return jsonResponse(getNearestAvailability(sheet));
@@ -327,9 +335,9 @@ if (
       )
     ) {
 
-      return jsonResponse(
-        createBooking(data)
-      );
+      const created = createBooking(data);
+      if (!created.success) created.code = "BOOKING_REJECTED";
+      return jsonResponse(created);
 
     }
 
@@ -554,6 +562,11 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
 
 
   try {
+    if (!clientChatId && data.requestId) {
+      if (!/^[a-f0-9]{32}$/.test(data.requestId)) return {success:false,error:"Некорректный идентификатор заявки"};
+      const existing=findBookingById("web-"+data.requestId);
+      if(existing) return websiteBookingResult(existing);
+    }
     let clientDraft;
     if (draftToken) {
       clientDraft = getClientBotState(clientChatId);
@@ -657,7 +670,7 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
     // --------------------------------------------------------
 
     const id =
-      clientDraft ? clientDraft.bookingId : Utilities.getUuid();
+      clientDraft ? clientDraft.bookingId : (!clientChatId && data.requestId ? "web-"+data.requestId : Utilities.getUuid());
 
 
     // --------------------------------------------------------
@@ -732,6 +745,7 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
       const token = Utilities.getUuid().replace(/-/g, "");
       contactProperties.setProperty("BOOKING_LINK_" + token, JSON.stringify({id:id, expiresAt:Date.now()+86400000}));
       telegramLink = "https://t.me/BagiraMasterBot?start=booking_" + token;
+      contactProperties.setProperty("BOOKING_SITE_LINK_"+id,telegramLink);
     }
 
     if (clientChatId) {
@@ -810,6 +824,12 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
     };
 
 
+  } catch (error) {
+    if (!clientChatId && data.requestId) {
+      const existing=findBookingById("web-"+data.requestId);
+      if(existing)return websiteBookingResult(existing);
+    }
+    throw error;
   } finally {
 
     try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
@@ -3793,4 +3813,8 @@ function deliverBookingNotification(booking,kind,text) {
     }
   } catch (error) { console.error("Не удалось сохранить результат доставки уведомления"); }
   return delivered;
+}
+
+function websiteBookingResult(booking) {
+  return {success:true,id:booking.id,telegramLink:PropertiesService.getScriptProperties().getProperty("BOOKING_SITE_LINK_"+booking.id) || "",message:"Заявка уже сохранена"};
 }

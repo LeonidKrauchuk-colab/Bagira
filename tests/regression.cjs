@@ -76,7 +76,7 @@ const end = frontend.indexOf('// ПОКАЗ УСПЕШНОГО СООБЩЕНИ�
 const submission = frontend.slice(begin, end);
 async function submit(result) {
   return vm.runInNewContext('(async () => {' + submission + 'return true;})()', {
-    fetch: async () => ({ok:true,json:async()=>result}), SCRIPT_URL:'mock', booking:{}
+    fetch: async () => ({ok:true,json:async()=>result}), SCRIPT_URL:'mock', booking:{}, lockPendingWebsiteBooking(){}, saveWebsiteDraft(){}, clearWebsiteDraft(){}
   });
 }
 (async () => {
@@ -84,7 +84,7 @@ async function submit(result) {
   await assert.rejects(submit({success:true}), /не подтвердил/);
   assert.equal(await submit({success:true,id:'booking-id'}), true);
   for (const [file, current, obsolete] of [
-    ['service-worker.js','bagira-static-v12','bagira-static-v11'],
+    ['service-worker.js','bagira-static-v13','bagira-static-v12'],
     ['admin/service-worker.js','bagira-admin-v10','bagira-admin-v9']
   ]) {
     const events = {}, deleted = [];

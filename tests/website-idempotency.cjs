@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
+const properties={},rows=[];let locked=false,notifications=0;
+const ctx=vm.createContext({console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>properties[k],setProperty:(k,v)=>properties[k]=v})},LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},SpreadsheetApp:{flush(){}},Utilities:{getUuid:()=>crypto.randomUUID()}});
+vm.runInContext(fs.readFileSync('Code.gs','utf8'),ctx);
+ctx.getSheet=()=>({getLastRow:()=>rows.length+1,getRange:()=>({setNumberFormat(){return this;},setValues(values){assert.ok(locked);const r=values[0];rows.push({id:r[0],date:r[5],time:r[6],status:r[8]});}})});
+ctx.getBookings=()=>rows;ctx.findBookingById=id=>rows.find(b=>b.id===id)||null;ctx.isBookingDateAllowed=()=>true;ctx.isClosedDay=()=>false;ctx.isBookingTimeAllowed=()=>true;ctx.isPastBookingTime=()=>false;ctx.sendNewBookingTelegram=()=>notifications++;
+const data={requestId:'a'.repeat(32),name:'Анна',phone:'+375291234567',service:'Маникюр',date:'2026-10-01',time:'10:00',telegram:'@anna'};
+const first=ctx.createBooking(data);assert.equal(first.success,true);assert.equal(rows.length,1);assert.equal(notifications,1);
+const retry=ctx.createBooking({...data});assert.equal(retry.id,first.id);assert.equal(retry.telegramLink,first.telegramLink);assert.equal(rows.length,1);assert.equal(notifications,1);
+rows[0].date='2026-10-02';assert.equal(ctx.createBooking(data).id,first.id,'retry after staff reschedule must not create new row');assert.equal(rows.length,1);
+assert.equal(ctx.createBooking({...data,requestId:'bad'}).success,false);
+const second=ctx.createBooking({...data,requestId:'b'.repeat(32)});assert.equal(second.success,true);assert.equal(rows.length,2);
+console.log('Website idempotency passed: one row and notification, same Telegram link, replay after move, new request, invalid key.');
