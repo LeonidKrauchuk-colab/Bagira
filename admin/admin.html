@@ -755,6 +755,21 @@
     button:disabled {opacity:.55;cursor:not-allowed;}
     button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible {outline:3px solid #81565d;outline-offset:3px;}
     @media(max-width:600px){.booking {display:block;}.card-actions>* {flex:1 1 130px;}.workbench-panel {padding:14px;}}
+    .admin-sticky-header {
+      position:sticky;top:0;z-index:100;
+      padding:14px 16px;margin-bottom:16px;
+      border-radius:0 0 18px 18px;
+      background:linear-gradient(135deg,#67405a,#9a6787);
+      box-shadow:0 6px 18px rgba(103,64,90,.2);
+    }
+    .admin-sticky-header h1 {margin:0 0 12px;padding:0;background:none;box-shadow:none;border-radius:0;font-size:26px;}
+    .admin-sticky-header .date-buttons {margin-bottom:0;}
+    .admin-sticky-header .date-buttons button {min-height:44px;}
+    html {scroll-padding-top:150px;}
+    @media(max-width:600px){
+      .admin-sticky-header {padding:12px 10px;}
+      .admin-sticky-header h1 {font-size:22px;}
+    }
   </style>
 
 </head>
@@ -781,9 +796,28 @@
     <div class="container">
 
 
-      <h1>
-        🖥 Админ-панель «Багира»
-      </h1>
+      <header class="admin-sticky-header">
+        <h1>Админ-панель «Багира»</h1>
+        <div class="date-buttons">
+
+
+          <button id="previousDayButton">
+            ← Предыдущий день
+          </button>
+
+
+          <button id="todayButton">
+            Сегодня
+          </button>
+
+
+          <button id="nextDayButton">
+            Следующий день →
+          </button>
+
+
+        </div>
+      </header>
       <button type="button" id="logoutButton" class="logout-button">Выйти</button>
 
 
@@ -806,27 +840,6 @@
   ========================== -->
 
       <div class="date-panel">
-
-
-        <div class="date-buttons">
-
-
-          <button id="previousDayButton">
-            ← Предыдущий день
-          </button>
-
-
-          <button id="todayButton">
-            Сегодня
-          </button>
-
-
-          <button id="nextDayButton">
-            Следующий день →
-          </button>
-
-
-        </div>
 
 
         <input type="date" id="selectedDate" class="date-input">
