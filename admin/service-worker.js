@@ -1,4 +1,4 @@
-const CACHE_NAME = "bagira-admin-v10";
+const CACHE_NAME = "bagira-admin-v11";
 
 const FILES_TO_CACHE = [
   "./admin.html",

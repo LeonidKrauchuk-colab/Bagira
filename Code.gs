@@ -290,6 +290,11 @@ if (
 
     }
 
+if (data.action === "adminWorkbench") {
+  if (!checkTelegramAdminAccess(data.sessionToken)) return jsonResponse({success:false,code:"AUTH_REQUIRED",error:"Войдите через Telegram."});
+  return jsonResponse(adminWorkbench(data));
+}
+
 // --------------------------------------------------------
 // ПОЛУЧЕНИЕ ЗАПИСЕЙ ДЛЯ АДМИН-ПАНЕЛИ
 // --------------------------------------------------------
@@ -309,11 +314,15 @@ if (
 
   const sheet = getSheet();
 
-  const bookings = getBookings(sheet);
+  const props = PropertiesService.getScriptProperties();
+  const bookings = getBookings(sheet).map(function(b) {
+    return Object.assign({},b,{source:props.getProperty("BOOKING_SOURCE_"+b.id)||"manual",telegramConnected:Boolean(props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+b.id)),contactNeeded:needsStaffContact(b),lastCall:props.getProperty("BOOKING_CALL_"+b.id)||"",deliveryFailures:getBookingDeliveryFailures(b.id),revision:staffBookingRevision(b),visitStarted:bookingHasStarted(b)});
+  });
 
   return jsonResponse({
     success: true,
     bookings: bookings,
+    closedDays:getClosedDays(),scheduleSettings:getScheduleSettings(),today:getDateAfterDays(0),currentTime:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),"HH:mm"),
     closedSlots: getClosedSlotsMap()
   });
 
@@ -996,6 +1005,7 @@ function updateAdminBooking(data) {
 
   return updateAdminBookingInternal({
 
+    revision:data.revision,
     id:
       data.id,
 
@@ -1059,6 +1069,8 @@ function updateAdminBookingInternalLocked(data) {
 
   }
 
+
+  if(data.revision && staffBookingRevision(booking)!==data.revision) return {success:false,error:"Запись изменилась. Обновите список перед редактированием."};
 
   // --------------------------------------------------------
   // Если меняются дата или время,
@@ -3665,10 +3677,11 @@ function isSlotClosed(date,time) { return getClosedSlots(date).includes(time); }
 function bookingHasStarted(booking) {
   return booking.date < getDateAfterDays(0) || isPastBookingTime(booking.date, booking.time);
 }
-function setStaffVisitStatus(id, action) {
+function setStaffVisitStatus(id, action, revision) {
   return withBookingLock(function() {
     const booking = findBookingById(id);
     if (!booking) return {success:false,error:"Запись не найдена"};
+    if(revision && staffBookingRevision(booking)!==revision)return {success:false,error:"Запись изменилась. Обновите список."};
     const status = {done:"Выполнена",missed:"Не пришёл",active:"Активна"}[action];
     if (!status || !bookingHasStarted(booking) || !["Активна","Выполнена","Не пришёл"].includes(booking.status))
       return {success:false,error:"Отметка доступна только для подтверждённой записи после начала визита."};
@@ -3817,4 +3830,49 @@ function deliverBookingNotification(booking,kind,text) {
 
 function websiteBookingResult(booking) {
   return {success:true,id:booking.id,telegramLink:PropertiesService.getScriptProperties().getProperty("BOOKING_SITE_LINK_"+booking.id) || "",message:"Заявка уже сохранена"};
+}
+
+// Общие правила рабочего меню сайта и бота.
+function adminWorkbench(data) {
+  if(data.operation === "slots") return {success:true,times:staffFreeTimes(data.date,data.id,getBookings(getSheet()))};
+  if(data.operation === "slot") {
+    if(typeof data.closed !== "boolean") return {success:false,error:"Укажите состояние окна."};
+    return setStaffSlotClosed(data.date,data.time,data.closed);
+  }
+  if(data.operation === "visit") {
+    const result=setStaffVisitStatus(data.id,data.status,data.revision);
+    if(result.success) {try{editTelegramBookingMessages(result.booking,null,"confirm");}catch(error){console.error("Статус сохранён, карточка Telegram не обновлена");}}
+    return result;
+  }
+  const result = withBookingLock(function() {
+    const b=findBookingById(data.id),props=PropertiesService.getScriptProperties();
+    if(!b || !data.revision || staffBookingRevision(b)!==data.revision) return {success:false,error:"Запись изменилась. Обновите список и повторите действие."};
+    const previous={date:b.date,time:b.time};
+    if(data.operation === "missed" || data.operation === "resolved") {
+      if(!needsStaffContact(b))return {success:false,error:"Заявка уже обработана."};
+      if(data.operation === "missed")props.setProperty("BOOKING_CALL_"+b.id,String(Date.now()));
+      else ["confirm","cancel","move","reminder"].forEach(function(k){props.deleteProperty("BOOKING_DELIVERY_"+b.id+"_"+k);});
+      return {success:true,booking:b};
+    }
+    if(!["Активна","Ожидает подтверждения"].includes(b.status))return {success:false,error:"Действие недоступно для этого статуса."};
+    if(data.operation === "move") {
+      if(!staffFreeTimes(data.date,b.id,getBookings(getSheet())).includes(data.time))return {success:false,error:"Время недоступно. Выберите другое."};
+      getSheet().getRange(b.rowNumber,6,1,2).setValues([[data.date,data.time]]);b.date=data.date;b.time=data.time;
+      props.deleteProperty(BOOKING_REMINDER_PREFIX+b.id);
+    } else if(data.operation === "confirm" || data.operation === "cancel") {
+      if(data.operation === "confirm" && b.status!=="Ожидает подтверждения")return {success:false,error:"Запись уже подтверждена."};
+      b.status=data.operation === "confirm" ? "Активна" : "Отменена";
+      getSheet().getRange(b.rowNumber,9).setValue(b.status);
+    } else return {success:false,error:"Неизвестное действие"};
+    return {success:true,booking:b,previous:previous};
+  });
+  if(result.success && ["confirm","cancel","move"].includes(data.operation)) {
+    const b=result.booking;
+    try {
+      editTelegramBookingMessages(b,null,data.operation);
+      if(data.operation === "move") deliverBookingNotification(b,"move","📅 <b>Ваша запись перенесена</b>\nБыло: "+staffDateLabel(result.previous.date)+" в "+result.previous.time+"\nСтало: "+staffDateLabel(b.date)+" в "+b.time+"\n💅 "+escapeTelegram(b.service));
+      else sendClientBookingStatus(b,data.operation);
+    }catch(error){console.error("Изменение сохранено, уведомление не доставлено");}
+  }
+  return result;
 }

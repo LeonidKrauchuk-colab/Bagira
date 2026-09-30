@@ -734,6 +734,27 @@
       }
 
     }
+    .workbench-panel {background:white;border-radius:16px;padding:18px;margin:18px 0;}
+    .workbench-tabs,.card-actions,#daySlotControls {display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;}
+    .workbench-panel button,.card-actions button,.card-actions a,.move-dialog button,.add-booking-button {min-height:44px;padding:10px 14px;border:1px solid #c5a6af;border-radius:10px;background:#f8f1f3;color:#56343d;font:inherit;cursor:pointer;text-decoration:none;}
+    .workbench-tabs [aria-pressed="true"] {background:#81565d;color:white;}
+    #clientSearch {display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px;}
+    #todayOverview {font-weight:600;line-height:1.6;}
+    #workbenchStatus {color:#245c39;line-height:1.5;}
+    #workbenchResults .booking {margin:12px 0;}
+    .contact-warning {color:#a62218;}
+    .workload-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;}
+    .workload-grid .day-closed {background:#eee;color:#555;}
+    .workload-grid .day-full {background:#fbe7e4;}
+    .workload-grid .day-open {background:#eaf4ed;}
+    .workload-grid [aria-pressed="true"] {outline:2px solid #81565d;}
+    .move-dialog {margin:auto;padding:24px;border:0;border-radius:18px;width:min(480px,90vw);box-sizing:border-box;max-height:85vh;overflow:auto;}
+    .move-dialog::backdrop {background:#0008;}
+    .move-dialog input,.move-dialog select {display:block;width:100%;box-sizing:border-box;font-size:16px;padding:12px;margin:12px 0;}
+    .booking-info p {margin:6px 0;overflow-wrap:anywhere;}
+    button:disabled {opacity:.55;cursor:not-allowed;}
+    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible {outline:3px solid #81565d;outline-offset:3px;}
+    @media(max-width:600px){.booking {display:block;}.card-actions>* {flex:1 1 130px;}.workbench-panel {padding:14px;}}
   </style>
 
 </head>
@@ -766,6 +787,20 @@
       <button type="button" id="logoutButton" class="logout-button">Выйти</button>
 
 
+      <section class="workbench-panel" aria-label="Рабочий день">
+        <p id="workbenchStatus" role="status" aria-live="polite"></p>
+        <div id="todayOverview"></div>
+        <div class="workbench-tabs">
+          <button type="button" data-view="day">Расписание дня</button>
+          <button type="button" data-view="pending">Ожидают подтверждения</button>
+          <button type="button" data-view="contact">Нужно связаться</button>
+        </div>
+        <label for="clientSearch">Поиск и история клиента</label>
+        <input id="clientSearch" type="search" placeholder="Имя или телефон" autocomplete="off">
+        <div id="workbenchResults"></div>
+      </section>
+      <details class="workbench-panel"><summary>Календарь загрузки</summary><div id="workloadCalendar"></div></details>
+      <details class="workbench-panel"><summary>Окна и выходной выбранного дня</summary><div id="daySlotControls"></div></details>
       <!-- =========================
        ДАТА
   ========================== -->
@@ -854,7 +889,7 @@
           </span>
 
           <span class="summary-title">
-            Активных записей
+            Записей на день
           </span>
         </div>
 
@@ -894,6 +929,7 @@
        ЗАПИСИ
   ========================== -->
 
+      <h2 id="selectedDayHeading"></h2>
       <div id="bookingsContainer"></div>
 
 
@@ -1079,6 +1115,8 @@
     const closedDaysError = document.getElementById("closedDaysError");
     let closedDays = [];
     let closedSlots = {};
+    let workbenchBookings=[],workbenchView="day",serverToday="",serverTime="",calendarMonth="",modalOriginal="",editingRevision="",settingsDirty=false;
+    let bookingLoadVersion=0;
     const scheduleSettingsToggle = document.getElementById("scheduleSettingsToggle");
     const scheduleSettingsPanel = document.getElementById("scheduleSettingsPanel");
     const scheduleSettingsChevron = document.getElementById("scheduleSettingsChevron");
@@ -1272,6 +1310,7 @@
           throw new Error("Требуется вход через Telegram.");
         }
         if (!result.success) throw new Error(result.error || "Не удалось сохранить расписание");
+        settingsDirty=false;
         scheduleSettings = result.scheduleSettings;
         renderWeeklySchedule(scheduleSettings.weeklySchedule);
         updateWorkTimesForSelectedDate();
@@ -1675,6 +1714,7 @@
     ===================================================== */
 
     async function loadBookings() {
+      const requestVersion=++bookingLoadVersion;
       const requestToken = ADMIN_SESSION_TOKEN;
       if (!requestToken) return;
       updateWorkTimesForSelectedDate();
@@ -1725,12 +1765,17 @@
           );
         }
 
-        if (ADMIN_SESSION_TOKEN !== requestToken) return;
+        if (ADMIN_SESSION_TOKEN !== requestToken || requestVersion!==bookingLoadVersion) return;
         const bookings = result.bookings;
+        workbenchBookings=bookings;
+        serverToday=result.today || getTodayString();serverTime=result.currentTime || "00:00";
+        if(result.closedDays)closedDays=result.closedDays;
+        if(result.scheduleSettings)scheduleSettings=result.scheduleSettings;
         closedSlots = result.closedSlots || {};
         updateWorkTimesForSelectedDate();
 
         const date = selectedDate.value;
+        document.getElementById("selectedDayHeading").textContent=formatDayTitle(date);
 
         /*
          * Все неотменённые записи занимают своё время, включая итоги визитов.
@@ -1791,13 +1836,14 @@
 
           if (booking) {
             bookingList.appendChild(createActiveCard(booking));
-          } else {
+          } else if(date>serverToday || date===serverToday && time>serverTime) {
             bookingList.appendChild(createFreeCard(time));
           }
 
         });
         }
 
+        activeBookings.filter(b=>selectedDayClosed || !WORK_TIMES.includes(String(b.time).slice(0,5))).forEach(b=>bookingList.append(createActiveCard(b)));
         dayElement.appendChild(bookingList);
         bookingsContainer.appendChild(dayElement);
 
@@ -1807,10 +1853,11 @@
         activeCount.textContent = activeBookings.length;
 
         freeCount.textContent =
-          WORK_TIMES.filter(time => !busyTimes.has(time)).length;
+          freeDayTimes(date).length;
         totalCount.textContent =
           WORK_TIMES.length;
 
+        renderWorkbench();
         const now = new Date();
 
         lastUpdated.textContent =
@@ -1844,114 +1891,33 @@
        АКТИВНАЯ КАРТОЧКА
     ===================================================== */
 
-    function createActiveCard(
-      booking
-    ) {
-
-      const card = document.createElement("div");
-
-      card.className =
-        "booking active-booking";
-
-      const time = String(
-        booking.time || ""
-      )
-        .trim()
-        .substring(0, 5);
-
-      card.innerHTML = `
-
-      <div class="booking-time">
-        🟢 ${time}
-      </div>
-
-      <div class="booking-info">
-
-        <div>
-          <strong>Имя:</strong>
-          ${escapeHtml(booking.name)}
-        </div>
-
-        <div>
-          <strong>Телефон:</strong>
-          ${escapeHtml(booking.phone)}
-        </div>
-
-        <div>
-          <strong>Telegram:</strong>
-          ${escapeHtml(booking.telegram)}
-        </div>
-
-        <div>
-          <strong>Услуга:</strong>
-          ${escapeHtml(booking.service)}
-        </div>
-
-        <div>
-          <strong>Комментарий:</strong>
-          ${escapeHtml(booking.comment)}
-        </div>
-
-        <div>
-          <strong>Статус:</strong>
-          ${escapeHtml(booking.status)}
-        </div>
-
-      </div>
-
-      <div>
-
-        <button class="edit-button">
-          ✏️ Редактировать
-        </button>
-
-        <button class="delete-button">
-          🗑 Удалить запись
-        </button>
-
-      </div>
-
-    `;
-
-      const editButton = card.querySelector(
-        ".edit-button"
-      );
-
-      editButton.addEventListener(
-        "click",
-        () => {
-          openEditBookingModal(booking);
-        }
-      );
-
-
-      const deleteButton = card.querySelector(
-        ".delete-button"
-      );
-
-      deleteButton.addEventListener(
-        "click",
-        async () => {
-
-          const confirmed = confirm(
-            `Удалить запись?\n\n` +
-            `Время: ${time}\n` +
-            `Клиент: ${booking.name}`
-          );
-
-          if (!confirmed) {
-            return;
-          }
-
-          await deleteBooking(booking.id);
-
-        }
-      );
-
+    function createActiveCard(booking) {
+      const card=document.createElement("article");card.className="booking active-booking";
+      const info=document.createElement("div");info.className="booking-info";
+      const source={site:"Сайт",bot:"Telegram-бот",manual:"Ручная / ранее созданная запись"}[booking.source] || "Не указан";
+      [["Дата",formatDate(booking.date)+" · "+booking.time],["Клиент",booking.name],["Телефон",booking.phone],["Услуга",booking.service],["Статус",booking.status],["Источник",source],["Telegram",(booking.telegram || "Не указан")+(booking.telegramConnected ? " · уведомления подключены" : " · уведомления не подключены")],["Комментарий",booking.comment || "—"]].forEach(([label,value])=>{const row=document.createElement("p");const strong=document.createElement("strong");strong.textContent=label+": ";row.append(strong,document.createTextNode(value || ""));info.append(row);});
+      if(booking.lastCall){const line=document.createElement("p");line.textContent="Не дозвонилась: "+new Date(Number(booking.lastCall)).toLocaleString("ru-RU",{timeZone:"Europe/Minsk"});info.append(line);}
+      if(booking.deliveryFailures?.length){const line=document.createElement("p");line.className="contact-warning";line.textContent="Не отправлено: "+booking.deliveryFailures.map(k=>({confirm:"подтверждение",cancel:"отмена",move:"перенос",reminder:"напоминание"}[k]||k)).join(", ");info.append(line);}
+      const actions=document.createElement("div");actions.className="card-actions";card.append(info,actions);
+      const add=(label,fn)=>{const button=document.createElement("button");button.type="button";button.textContent=label;button.onclick=async()=>{button.disabled=true;try{await fn();}catch(error){showError(error.message);}finally{button.disabled=false;}};actions.append(button);};
+      const phone=String(booking.phone||"").replace(/[^+0-9]/g,"");
+      if(phone){const call=document.createElement("a");call.href="tel:"+phone;call.textContent="Позвонить";actions.append(call);}
+      if(booking.status==="Ожидает подтверждения")add("Подтвердить",()=>runWorkbench(booking,"confirm"));
+      if(["Активна","Ожидает подтверждения"].includes(booking.status)){
+        add("Перенести",()=>openMoveDialog(booking));
+        add("Редактировать",()=>openEditBookingModal(booking));
+        add("Отменить",()=>runWorkbench(booking,"cancel",{},true));
+      }
+      if(booking.visitStarted && booking.status==="Активна"){
+        add("Выполнена",()=>runWorkbench(booking,"visit",{status:"done"}));add("Не пришёл",()=>runWorkbench(booking,"visit",{status:"missed"}));
+      }
+      if(["Выполнена","Не пришёл"].includes(booking.status))add("Исправить отметку",()=>runWorkbench(booking,"visit",{status:"active"},true));
+      if(booking.contactNeeded)add("Не дозвонилась",()=>runWorkbench(booking,"missed"));
+      if(booking.deliveryFailures?.length)add("Клиент уведомлён по телефону",()=>runWorkbench(booking,"resolved",{},true));
+      add("История клиента",()=>{document.getElementById("clientSearch").value=phone || booking.name;renderWorkbenchResults();});
+      add("Записать снова",()=>{openBookingModal(selectedDate.value,"");bookingName.value=booking.name||"";bookingPhone.value=booking.phone||"";bookingTelegram.value=booking.telegram||"";bookingService.value=booking.service||"";modalOriginal=modalSnapshot();});
       return card;
-
     }
-
 
     /* =====================================================
        СВОБОДНОЕ ВРЕМЯ
@@ -2016,7 +1982,8 @@
     }
 
     function updateBookingTimeOptions(date, selectedTime) {
-      const times = buildWorkTimes(scheduleSettings, date);
+      const times = closedDays.includes(date) ? [] : buildWorkTimes(scheduleSettings, date).filter(time=>
+        (date>serverToday || date===serverToday && time>serverTime) && !workbenchBookings.some(b=>b.id!==editingBookingId && b.date===date && b.time===time && b.status!=="Отменена"));
       bookingTime.innerHTML = `<option value="">Выберите время</option>`;
       if (selectedTime && !times.includes(selectedTime)) times.push(selectedTime);
       times.forEach(time => {
@@ -2040,6 +2007,7 @@
       time
     ) {
 
+      bookingDate.disabled=false;bookingTime.disabled=false;
       editingBookingId = null;
 
       modalTitle.textContent = "➕ Новая запись";
@@ -2086,6 +2054,7 @@
       );
 
 
+      modalOriginal=modalSnapshot();
       bookingName.focus();
 
     }
@@ -2098,6 +2067,7 @@
     function openEditBookingModal(booking) {
 
       editingBookingId = booking.id;
+      editingRevision=booking.revision;
 
       modalTitle.textContent = "✏️ Редактирование записи";
       saveBookingButton.textContent = "Сохранить изменения";
@@ -2116,8 +2086,10 @@
       modalError.textContent = "";
       modalError.style.display = "none";
 
+      bookingDate.disabled=true;bookingTime.disabled=true;
       bookingModal.classList.add("active");
 
+      modalOriginal=modalSnapshot();
       bookingName.focus();
 
     }
@@ -2127,7 +2099,10 @@
        ЗАКРЫТЬ MODAL
     ===================================================== */
 
-    function closeBookingModal() {
+    function closeBookingModal(force=false) {
+      if(force!==true && saveBookingButton.disabled)return;
+      if(force!==true && modalOriginal && modalSnapshot()!==modalOriginal && !confirm("Закрыть без сохранения изменений?"))return;
+      modalOriginal="";
 
       bookingModal.classList.remove(
         "active"
@@ -2194,6 +2169,8 @@
         return;
       }
 
+      if(saveBookingButton.disabled)return;
+      if(!confirm(`Сохранить запись?\n${name}\n${formatDate(date)} в ${time}\n${service}`))return;
       saveBookingButton.disabled = true;
       saveBookingButton.textContent =
         editingBookingId ? "Сохраняем..." : "Создаём...";
@@ -2213,6 +2190,7 @@
         if (editingBookingId) {
           payload.action = "updateAdminBooking";
           payload.id = editingBookingId;
+          payload.revision=editingRevision;
         } else {
           payload.action = "addAdminBooking";
         }
@@ -2248,7 +2226,7 @@
 
         const wasEditing = Boolean(editingBookingId);
 
-        closeBookingModal();
+        closeBookingModal(true);
         await loadBookings();
 
         alert(
@@ -2587,12 +2565,13 @@
 
 
     function closeAdminSession(message) {
+      workbenchBookings=[];["workbenchResults","todayOverview","workloadCalendar","daySlotControls","workbenchStatus"].forEach(id=>document.getElementById(id).replaceChildren());document.getElementById("clientSearch").value="";document.querySelectorAll(".move-dialog").forEach(d=>d.remove());
       ADMIN_SESSION_TOKEN = "";
       clearTimeout(adminSessionTimer);
       document.getElementById("adminApp").style.display = "none";
       document.getElementById("telegramLogin").style.display = "flex";
       bookingsContainer.replaceChildren();
-      closeBookingModal();
+      closeBookingModal(true);
       if (message) showLoginError(message);
     }
 
@@ -2658,7 +2637,9 @@
 
     document.getElementById("retryTelegramLogin").addEventListener("click", initTelegramLogin);
     document.getElementById("logoutButton").addEventListener("click", async () => {
+      if((settingsDirty || bookingModal.classList.contains("active") && modalOriginal && modalSnapshot()!==modalOriginal) && !confirm("Выйти без сохранения изменений?"))return;
       const token = ADMIN_SESSION_TOKEN;
+      settingsDirty=false;
       closeAdminSession();
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
@@ -2737,6 +2718,79 @@
 
       });
 
+    }
+
+    function modalSnapshot(){return JSON.stringify([bookingDate.value,bookingTime.value,bookingName.value,bookingPhone.value,bookingTelegram.value,bookingService.value,bookingComment.value]);}
+    window.addEventListener("beforeunload",event=>{if(settingsDirty || bookingModal.classList.contains("active") && modalOriginal && modalSnapshot()!==modalOriginal){event.preventDefault();event.returnValue="";}});
+    scheduleSettingsPanel.addEventListener("input",()=>settingsDirty=true);
+    function workbenchMessage(text){document.getElementById("workbenchStatus").textContent=text;}
+    async function workbenchRequest(operation,extra={}) {
+      const token=ADMIN_SESSION_TOKEN;
+      const response=await fetch(GOOGLE_SCRIPT_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"adminWorkbench",operation,sessionToken:token,...extra})});
+      if(!response.ok)throw Error("Не удалось получить ответ. Обновите список перед повтором действия.");
+      const result=await response.json();
+      if(result.code==="AUTH_REQUIRED"){closeAdminSession("Войдите через Telegram ещё раз.");throw Error("Сессия истекла");}
+      if(token!==ADMIN_SESSION_TOKEN)throw Error("Сессия изменилась");
+      if(!result.success)throw Error(result.error||"Не удалось выполнить действие");return result;
+    }
+    async function runWorkbench(booking,operation,extra={},ask=false){
+      if(ask && !confirm(`${operation==="cancel" ? "Отменить запись?" : "Подтвердить действие?"}\n${booking.name}\n${formatDate(booking.date)} в ${booking.time}`))return;
+      await workbenchRequest(operation,{id:booking.id,revision:booking.revision,...extra});
+      await loadBookings();workbenchMessage("Изменения сохранены.");
+    }
+    function rawDayTimes(date){return scheduleSettings.weeklySchedule.find(d=>d.day===new Date(date+"T12:00:00").getDay())?.slots || [];}
+    function freeDayTimes(date){const limit=new Date(serverToday+"T12:00:00");limit.setDate(limit.getDate()+Number(scheduleSettings.bookingDays));const last=limit.getFullYear()+"-"+String(limit.getMonth()+1).padStart(2,"0")+"-"+String(limit.getDate()).padStart(2,"0");return date>last || closedDays.includes(date) ? [] : buildWorkTimes(scheduleSettings,date).filter(t=>(date>serverToday || date===serverToday && t>serverTime) && !workbenchBookings.some(b=>b.date===date && b.time===t && b.status!=="Отменена"));}
+    function renderWorkbench(){
+      const today=workbenchBookings.filter(b=>b.date===serverToday && ["Активна","Ожидает подтверждения"].includes(b.status));
+      const next=today.filter(b=>b.time>=serverTime).sort((a,b)=>a.time.localeCompare(b.time))[0];
+      document.getElementById("todayOverview").textContent=`Сегодня: ${today.length} записей · ${freeDayTimes(serverToday).length} свободных окон. `+(next ? `Ближайший клиент: ${next.name}, ${next.time}.` : "Предстоящих визитов сегодня нет.");
+      document.querySelector('[data-view="pending"]').textContent="Ожидают подтверждения · "+workbenchBookings.filter(b=>b.status==="Ожидает подтверждения"&&b.date>=serverToday).length;
+      document.querySelector('[data-view="contact"]').textContent="Нужно связаться · "+workbenchBookings.filter(b=>b.contactNeeded).length;
+      renderWorkbenchResults();renderWorkloadCalendar();renderDayControls();
+    }
+    function renderWorkbenchResults(){
+      const query=document.getElementById("clientSearch").value.trim().toLowerCase(),digits=query.replace(/\D/g,"");
+      const host=document.getElementById("workbenchResults");host.replaceChildren();
+      document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute("aria-pressed",String(!query && b.dataset.view===workbenchView)));
+      bookingsContainer.hidden=Boolean(query)||workbenchView!=="day";
+      document.getElementById("selectedDayHeading").hidden=bookingsContainer.hidden;
+      if(!query && workbenchView==="day")return;
+      const rows=workbenchBookings.filter(b=>query ? (String(b.name||"").toLowerCase().includes(query) || digits.length>=4 && String(b.phone||"").replace(/\D/g,"").includes(digits)) : workbenchView==="contact" ? b.contactNeeded : b.status==="Ожидает подтверждения"&&b.date>=serverToday).sort((a,b)=>(query ? -1 : 1)*(a.date+a.time).localeCompare(b.date+b.time));
+      const heading=document.createElement("p");heading.textContent=`Найдено: ${rows.length}`;host.append(heading);
+      let shown=0;const more=document.createElement("button");more.type="button";more.textContent="Показать ещё";
+      function append(){rows.slice(shown,shown+10).forEach(b=>host.insertBefore(createActiveCard(b),more));shown+=10;more.hidden=shown>=rows.length;}
+      more.onclick=append;host.append(more);append();
+    }
+    document.getElementById("clientSearch").addEventListener("input",renderWorkbenchResults);
+    document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>{workbenchView=button.dataset.view;document.getElementById("clientSearch").value="";renderWorkbenchResults();});
+    function renderWorkloadCalendar(){
+      const host=document.getElementById("workloadCalendar");host.replaceChildren();if(!calendarMonth)calendarMonth=(selectedDate.value||serverToday).slice(0,7);
+      const nav=document.createElement("div");nav.className="workbench-tabs";
+      [-1,0,1].forEach(direction=>{const b=document.createElement("button");b.type="button";b.textContent=direction===0?calendarMonth:direction<0?"← Месяц":"Месяц →";b.onclick=()=>{const d=new Date(calendarMonth+"-01T12:00:00");d.setMonth(d.getMonth()+direction);calendarMonth=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");renderWorkloadCalendar();};nav.append(b);});host.append(nav);
+      const grid=document.createElement("div");grid.className="workload-grid";host.append(grid);
+      const first=new Date(calendarMonth+"-01T12:00:00"),count=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+      for(let n=1;n<=count;n++){const date=calendarMonth+"-"+String(n).padStart(2,"0"),busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена").length,free=freeDayTimes(date).length,closed=closedDays.includes(date)||!rawDayTimes(date).length;
+        const button=document.createElement("button");button.type="button";button.className=date<serverToday||closed?"day-closed":free?"day-open":"day-full";button.textContent=`${n} · ${busy} записей · ${closed?"выходной":free+" окон"}`;button.setAttribute("aria-pressed",String(date===selectedDate.value));button.onclick=()=>{selectedDate.value=date;workbenchView="day";document.getElementById("clientSearch").value="";loadBookings();};grid.append(button);}
+    }
+    function renderDayControls(){
+      const host=document.getElementById("daySlotControls");host.replaceChildren();const date=selectedDate.value;
+      const day=document.createElement("button");day.type="button";day.textContent=closedDays.includes(date)?"Убрать выходной "+formatDate(date):"Сделать выходным "+formatDate(date);
+      day.onclick=async()=>{const busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена");if(!closedDays.includes(date)&&busy.length){workbenchMessage("Сначала перенесите или отмените записи: "+busy.map(b=>b.time+" — "+b.name).join(", "));workbenchView="day";document.getElementById("clientSearch").value="";renderWorkbenchResults();return;}if(!confirm(day.textContent+"?"))return;day.disabled=true;try{const saved=await saveClosedDays(closedDays.includes(date)?closedDays.filter(d=>d!==date):[...closedDays,date]);await loadBookings();workbenchMessage(saved ? "Выходные сохранены." : closedDaysError.textContent || "Не удалось сохранить выходной.");}finally{day.disabled=false;}};host.append(day);
+      for(const time of [...new Set([...rawDayTimes(date),...(closedSlots[date]||[])])].sort()){
+        const closed=(closedSlots[date]||[]).includes(time),busy=workbenchBookings.some(b=>b.date===date&&b.time===time&&b.status!=="Отменена"),button=document.createElement("button");button.type="button";button.textContent=time+" — "+(busy?"занято":closed?"открыть":"закрыть");button.disabled=busy||closedDays.includes(date)||date<serverToday||date===serverToday&&time<=serverTime;button.onclick=async()=>{button.disabled=true;try{await workbenchRequest("slot",{date,time,closed:!closed});await loadBookings();workbenchMessage("Расписание сохранено.");}catch(error){showError(error.message);button.disabled=false;}};host.append(button);
+      }
+    }
+    async function openMoveDialog(booking){
+      const dialog=document.createElement("dialog");dialog.className="move-dialog";
+      const heading=document.createElement("h2");heading.textContent="Перенос: "+booking.name;
+      const details=document.createElement("p");details.textContent="Сейчас: "+formatDate(booking.date)+" в "+booking.time;
+      const date=document.createElement("input");date.type="date";date.min=serverToday;date.value=booking.date;date.setAttribute("aria-label","Новая дата");
+      const time=document.createElement("select");time.setAttribute("aria-label","Новое время");const status=document.createElement("p");status.setAttribute("role","status");
+      const save=document.createElement("button"),close=document.createElement("button");save.textContent="Проверить и перенести";close.textContent="Закрыть";save.type=close.type="button";let version=0,saving=false;
+      async function slots(){const v=++version;save.disabled=true;time.replaceChildren();status.textContent="Загружаем свободное время…";try{const result=await workbenchRequest("slots",{id:booking.id,date:date.value});if(v!==version)return;result.times.forEach(t=>time.add(new Option(t,t)));status.textContent=result.times.length?"Старое время сохраняется до подтверждения переноса.":"Свободных окон нет.";save.disabled=!result.times.length;}catch(error){status.textContent=error.message;}}
+      date.onchange=slots;close.onclick=()=>{if(!saving)dialog.close();};dialog.addEventListener("cancel",event=>{if(saving)event.preventDefault();});
+      save.onclick=async()=>{if(saving || !time.value)return;if(!confirm(`Перенести запись ${booking.name}?\nБыло: ${formatDate(booking.date)} ${booking.time}\nСтало: ${formatDate(date.value)} ${time.value}`))return;saving=true;save.disabled=true;date.disabled=true;time.disabled=true;try{await runWorkbench(booking,"move",{date:date.value,time:time.value});dialog.close();}catch(error){status.textContent=error.message;save.disabled=false;}finally{saving=false;date.disabled=false;time.disabled=false;}};
+      dialog.append(heading,details,date,time,status,save,close);document.body.append(dialog);dialog.addEventListener("close",()=>dialog.remove(),{once:true});dialog.showModal();await slots();
     }
   </script>
 </body>

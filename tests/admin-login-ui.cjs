@@ -4,12 +4,12 @@ const elements=new Map();
 function element(id){if(!elements.has(id)) elements.set(id,{style:{},textContent:'',children:[],hidden:false,replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},addEventListener(name,fn){this[name]=fn;}});return elements.get(id);}
 let response={success:true,botUsername:'BagiraMasterBot'},loaded=0,requests=[];
 const context=vm.createContext({
- window:{}, console, Date, Math,
- document:{getElementById:element,createElement:()=>({setAttribute(key,value){this[key]=value;}})},
+ window:{}, console, Date, Math, bookingModal:{classList:{contains:()=>false}},
+ document:{querySelectorAll:()=>[],getElementById:element,createElement:()=>({setAttribute(key,value){this[key]=value;}})},
  fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>response};},
  setTimeout:()=>1,clearTimeout(){},setToday(){},loadClosedDays:async()=>{},loadBookings:async()=>{loaded++;},closeBookingModal(){},bookingsContainer:element('bookings'),
 });
-vm.runInContext('let ADMIN_SESSION_TOKEN=""; let adminSessionTimer=null; const GOOGLE_SCRIPT_URL="mock";',context);
+vm.runInContext('let settingsDirty=false,modalOriginal="",workbenchBookings=[];let ADMIN_SESSION_TOKEN=""; let adminSessionTimer=null; const GOOGLE_SCRIPT_URL="mock";',context);
 const begin=html.indexOf('    function showLoginError');
 const end=html.indexOf('    initTelegramLogin();',begin);
 vm.runInContext(html.slice(begin,end),context);
