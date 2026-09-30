@@ -17,3 +17,11 @@ c.findBookingById=id=>({id});let result=press('save');assert.equal(result.succes
 result=press('save');assert.equal(result.success,true);say('Назад');assert.equal(state().step,'saved');
 c.startClientWizard('7');press('cancel');assert.equal(state().token,undefined);
 console.log('Client wizard passed: full date range, stale buttons, phone validation, preview/back, persisted-id replay, saved draft protection, cancellation.');
+// Selecting a nearest slot retains date/time and skips calendar after service.
+press(null,null,'client_slot:20261020:1000');assert.equal(state().date,'2026-10-20');assert.equal(state().time,'10:00');assert.equal(state().step,'service');
+press('service','1');assert.equal(state().step,'name');say('Назад');assert.equal(state().step,'service');assert.equal(state().time,'10:00');
+press('change');assert.equal(state().nearest,false);press('service','0');assert.equal(state().step,'date');
+const original=c.staffFreeTimes;c.staffFreeTimes=()=>[];c.sendClientNearestSlots=()=>{};
+const token=state().token;assert.equal(press(null,null,'client_slot:20261020:1000').success,false);assert.equal(state().token,token,'unavailable click must not replace draft');
+c.staffFreeTimes=original;press(null,null,'client_slot:20261020:1000');c.staffFreeTimes=()=>[];press('service','0');assert.equal(state().step,'date','slot taken during service selection returns to calendar');
+console.log('Nearest slots passed: retained selection, back/change, stale availability, draft preservation.');

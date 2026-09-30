@@ -2810,8 +2810,16 @@ function handleClientTelegramCallback(callback,event) {
   if (!chat || chat.type!=="private" || String(chat.id)!==String(callback.from.id)) return {success:false,error:"Access denied"};
   const chatId=String(chat.id), data=String(callback.data||"");
   if (isTelegramStaff(callback.from,chat)) { answerTelegramCallback(callback.id,"Рабочее меню"); staffBotMenu(chatId); return {success:true}; }
-  // Старые кнопки ближайших окон открывают новый сценарий, без скрытого выбора времени.
-  if (/^client_(slot:|slots$|service:|cancel$)/.test(data)) { answerTelegramCallback(callback.id,"Выберите услугу и дату"); startClientWizard(chatId); return {success:true}; }
+  const nearest = data.match(/^client_slot:(\d{8}):(\d{4})$/);
+  if (nearest) {
+    const date=nearest[1].slice(0,4)+"-"+nearest[1].slice(4,6)+"-"+nearest[1].slice(6);
+    const time=nearest[2].slice(0,2)+":"+nearest[2].slice(2);
+    const started=startClientWizard(chatId,{date:date,time:time});
+    answerTelegramCallback(callback.id,started ? "Время выбрано" : "Это время уже недоступно. Выберите другое.",!started);
+    if(!started)sendClientNearestSlots(chatId,"Актуальные свободные окна:");
+    return {success:started};
+  }
+  if (/^client_(slots$|service:|cancel$)/.test(data)) { answerTelegramCallback(callback.id,"Выберите услугу и дату"); startClientWizard(chatId); return {success:true}; }
   const match=data.match(/^client_w:([a-f0-9]{16}):(\d+):([a-z]+)(?::([\d-]+))?$/);
   if (!match) { answerTelegramCallback(callback.id,"Кнопка устарела",true); return {success:false}; }
   if (match[3]==="save") {
@@ -2834,8 +2842,11 @@ function handleClientTelegramCallback(callback,event) {
     if(state.token!==match[1] || String(state.version)!==match[2] || state.expiresAt<Date.now() || state.step==="saved") { answerTelegramCallback(callback.id,"Кнопка устарела. Откройте последнюю карточку.",true); return {success:false}; }
     const action=match[3],value=match[4];
     if(action==="cancel") { clearClientBotState(chatId); answerTelegramCallback(callback.id,"Заполнение отменено"); clientBotMenu(chatId); return {success:true}; }
-    if(action==="back") clientWizardBack(state);
-    else if(action==="service" && state.step==="service" && CLIENT_BOT_SERVICES[Number(value)]) { state.service=CLIENT_BOT_SERVICES[Number(value)];state.step="date"; }
+    if(action==="change" && state.step==="service" && state.nearest) {state.nearest=false;delete state.date;delete state.time;}
+    else if(action==="back") clientWizardBack(state);
+    else if(action==="service" && state.step==="service" && CLIENT_BOT_SERVICES[Number(value)]) { state.service=CLIENT_BOT_SERVICES[Number(value)];
+      if(state.nearest && staffFreeTimes(state.date,null,getBookings(getSheet())).includes(state.time)) state.step="name";
+      else {state.nearest=false;state.step="date";} }
     else if(action==="month" && state.step==="date" && /^\d{4}-\d{2}$/.test(value) && value>=getDateAfterDays(0).slice(0,7) && value<=getDateAfterDays(getScheduleSettings().bookingDays).slice(0,7)) state.month=value;
     else if(action==="date" && state.step==="date" && staffFreeTimes(value,null,getBookings(getSheet())).length) {state.date=value;state.step="time";}
     else if(action==="time" && state.step==="time" && /^\d{4}$/.test(value) && staffFreeTimes(state.date,null,getBookings(getSheet())).includes(value.slice(0,2)+":"+value.slice(2))) {state.time=value.slice(0,2)+":"+value.slice(2);state.step="name";}
@@ -2843,20 +2854,27 @@ function handleClientTelegramCallback(callback,event) {
     setClientBotState(chatId,state);answerTelegramCallback(callback.id,"Готово");renderClientWizard(chatId,state);return {success:true};
   });
 }
-function startClientWizard(chatId) {
-  withBookingLock(function() {
+function startClientWizard(chatId,slot) {
+  return withBookingLock(function() {
+    if(slot && !staffFreeTimes(slot.date,null,getBookings(getSheet())).includes(slot.time)) return false;
     const state={token:Utilities.getUuid().replace(/-/g,"").slice(0,16),bookingId:Utilities.getUuid(),version:0,step:"service",month:getDateAfterDays(0).slice(0,7),expiresAt:Date.now()+1800000};
-    setClientBotState(chatId,state);renderClientWizard(chatId,state);
+    if(slot) {state.date=slot.date;state.time=slot.time;state.month=slot.date.slice(0,7);state.nearest=true;}
+    setClientBotState(chatId,state);renderClientWizard(chatId,state);return true;
   });
 }
 function clientWizardBack(state) {
+  if(state.nearest && state.step==="name") {state.step="service";return;}
   state.step={date:"service",time:"date",name:"time",phone:"name",review:"phone"}[state.step] || "service";
 }
 function renderClientWizard(chatId,state) {
   state.version=(state.version||0)+1;setClientBotState(chatId,state);
   const button=(text,action,value)=>({text:text,callback_data:"client_w:"+state.token+":"+state.version+":"+action+(value===undefined ? "" : ":"+value)});
   let text="",rows=[];
-  if(state.step==="service") {text="Выберите услугу:";rows=CLIENT_BOT_SERVICES.map((name,i)=>[button(name,"service",i)]);}
+  if(state.step==="service") {
+    text=(state.nearest ? "Вы выбрали "+staffDateLabel(state.date)+" в "+state.time+". Время пока не забронировано.\n" : "")+"Выберите услугу:";
+    rows=CLIENT_BOT_SERVICES.map((name,i)=>[button(name,"service",i)]);
+    if(state.nearest)rows.push([button("Выбрать другое время","change")]);
+  }
   if(state.step==="date") {
     text="Выберите дату. Показаны дни со свободным временем.\n"+state.month;
     const first=state.month+"-01",end=staffDateShift(first,32).slice(0,7)+"-01",bookings=getBookings(getSheet());
