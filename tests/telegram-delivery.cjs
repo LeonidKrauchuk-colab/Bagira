@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const props={BOOKING_CLIENT_CHAT_b:'7'}, warnings=[];let fail=true;
+const c=vm.createContext({console,PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k],setProperty:(k,v)=>props[k]=v,deleteProperty:k=>delete props[k]})},LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},SpreadsheetApp:{flush(){}},Utilities:{formatDate:()=> '30.09.2026 12:00'},Session:{getScriptTimeZone:()=> 'Europe/Minsk'}});
+vm.runInContext(fs.readFileSync('Code.gs','utf8'),c);
+const b={id:'b',date:'2026-10-01',time:'10:00',status:'Отменена'};
+c.findBookingById=()=>b;c.getDateAfterDays=()=> '2026-09-30';c.sendClientBotMessage=()=>{if(fail)throw Error('blocked');};c.sendStaffBookingCard=()=>{};c.answerTelegramCallback=()=>{};
+assert.equal(c.deliverBookingNotification(b,'cancel','test'),false);
+assert.equal(c.needsStaffContact(b),true,'cancelled booking must remain until customer informed');
+fail=false;c.deliverBookingNotification(b,'reminder','test');
+assert.equal(c.needsStaffContact(b),true,'unrelated success must not clear failed cancellation');
+const press=kind=>c.processStaffTelegramCallback({id:'cb',message:{chat:{id:1}},data:'admin_call:'+kind+':b'});
+assert.equal(press('missed').success,true);assert.ok(props.BOOKING_CALL_b);assert.match(c.bookingContactHistory(b),/Не дозвонилась/);
+assert.equal(press('resolved').success,true);assert.equal(c.needsStaffContact(b),false);
+assert.equal(press('missed').success,false,'stale card cannot reopen resolved contact');
+fail=true;c.deliverBookingNotification(b,'cancel','test');fail=false;c.deliverBookingNotification(b,'cancel','test');assert.equal(c.needsStaffContact(b),false);
+console.log('Delivery and call tracking passed.');

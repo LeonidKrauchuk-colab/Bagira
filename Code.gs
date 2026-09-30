@@ -2452,9 +2452,11 @@ function startStaffAction(chatId, id, kind) {
   return { token: token, booking: booking };
 }
 function staffBookingButtons(booking) {
+  const contactRows = needsStaffContact(booking) ? [[{text:"Не дозвонилась",callback_data:"admin_call:missed:"+booking.id}]] : [];
+  if (getBookingDeliveryFailures(booking.id).length) contactRows.push([{text:"Клиент уведомлён по телефону",callback_data:"admin_call:resolved:"+booking.id}]);
   if (["Выполнена", "Не пришёл"].includes(booking.status)) return {inline_keyboard:[[{text:"Исправить отметку",callback_data:"admin_visit:active:" + booking.id}]]};
-  if (!["Активна", "Ожидает подтверждения"].includes(booking.status)) return { inline_keyboard: [] };
-  const rows = [];
+  if (!["Активна", "Ожидает подтверждения"].includes(booking.status)) return { inline_keyboard: contactRows };
+  const rows = contactRows;
   if (booking.status === "Активна" && bookingHasStarted(booking)) rows.push([
     {text:"Выполнена",callback_data:"admin_visit:done:" + booking.id},
     {text:"Не пришёл",callback_data:"admin_visit:missed:" + booking.id}
@@ -2546,7 +2548,7 @@ function finishStaffAction(callback, token, kind) {
     const clientChat = PropertiesService.getScriptProperties().getProperty(BOOKING_CLIENT_CHAT_PREFIX + result.booking.id);
     if (clientChat) {
       try {
-        sendClientBotMessage(clientChat, "📅 <b>Ваша запись перенесена</b>\n💅 " + escapeTelegram(result.booking.service) +
+        deliverBookingNotification(result.booking, "move", "📅 <b>Ваша запись перенесена</b>\n💅 " + escapeTelegram(result.booking.service) +
           "\nБыло: " + staffDateLabel(result.previous.date) + " в " + escapeTelegram(result.previous.time) +
           "\nСтало: " + staffDateLabel(result.booking.date) + " в " + escapeTelegram(result.booking.time) +
           "\nСтатус: " + escapeTelegram(result.booking.status));
@@ -2579,6 +2581,22 @@ function processStaffTelegramCallback(callback) {
   const chatId = String(callback.message.chat.id);
   const data = String(callback.data || "");
   let match;
+  if ((match = data.match(/^admin_call:(missed|resolved):([\w-]+)$/))) {
+    const result = withBookingLock(function() {
+      const booking = findBookingById(match[2]);
+      if (!booking || !needsStaffContact(booking)) return {success:false,error:"Заявка уже обработана. Обновите список."};
+      const props = PropertiesService.getScriptProperties();
+      if (match[1] === "missed") props.setProperty("BOOKING_CALL_"+booking.id, String(Date.now()));
+      else ["confirm","cancel","move","reminder"].forEach(function(kind) { props.deleteProperty("BOOKING_DELIVERY_"+booking.id+"_"+kind); });
+      return {success:true,booking:booking};
+    });
+    answerStaffSavedAction(callback.id,result,match[1]==="missed" ? "Попытка звонка сохранена" : "Отмечено: клиент уведомлён");
+    if (result.success) {
+      try { sendStaffBookingCard(chatId,result.booking); } catch (error) { console.error("Не доставлена карточка после отметки звонка"); }
+    }
+    return result;
+  }
+
   if ((match = data.match(/^admin_contact:(\d{1,6})$/))) {
     answerTelegramCallback(callback.id,"Загружаю записи…");
     sendStaffContactQueue(chatId,Number(match[1]));
@@ -2918,7 +2936,7 @@ function sendClientBookingStatus(booking, outcome) {
   const text = (confirmed ? "✅ <b>Ваша запись подтверждена</b>" : "❌ <b>Ваша запись отменена</b>") +
     "\n\n💅 " + escapeTelegram(booking.service) +
     "\n📅 " + formatDateForTelegram(booking.date) + " в " + escapeTelegram(booking.time);
-  try { sendClientBotMessage(chatId, text); } catch (error) { console.error("Не удалось уведомить клиента: " + error.message); }
+  deliverBookingNotification(booking, confirmed ? "confirm" : "cancel", text);
 }
 
 function sendClientBookingReminders() {
@@ -2939,8 +2957,8 @@ function sendClientBookingReminders() {
     const reminderKey = BOOKING_REMINDER_PREFIX + booking.id;
     if (!chatId || properties.getProperty(reminderKey)) return;
     try {
-      sendClientBotMessage(chatId, "⏰ <b>Напоминание: запись примерно через час</b>\n\n💅 " + escapeTelegram(booking.service) + "\n📅 Сегодня в " + escapeTelegram(booking.time));
-      properties.setProperty(reminderKey, "sent");
+      const delivered = deliverBookingNotification(booking, "reminder", "⏰ <b>Напоминание: запись примерно через час</b>\n\n💅 " + escapeTelegram(booking.service) + "\n📅 Сегодня в " + escapeTelegram(booking.time));
+      if (delivered) properties.setProperty(reminderKey, "sent");
     } catch (error) {
       console.error("Не удалось отправить напоминание: " + error.message);
     }
@@ -3605,7 +3623,7 @@ function bookingContactText(booking) {
   const source = props.getProperty("BOOKING_SOURCE_" + booking.id);
   const linked = props.getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id);
   const label = source === "bot" ? "Telegram-бот" : source === "site" ? "Сайт" : "Ранее созданная / ручная запись";
-  return "📍 <b>Источник:</b> " + label + "\n" + (linked
+  return bookingContactHistory(booking) + "📍 <b>Источник:</b> " + label + "\n" + (linked
     ? "💬 Telegram подключён — уведомления через бота."
     : booking.telegram ? "☎️ Позвонить: Telegram указан, но уведомления через бота не подключены."
     : "☎️ Позвонить клиенту для подтверждения или переноса.");
@@ -3645,22 +3663,61 @@ function formatBookingCell(sheet,row,column,format) {
   }
 }
 function sendStaffContactQueue(chatId,offset) {
-  const props = PropertiesService.getScriptProperties();
-  const today = getDateAfterDays(0);
-  const bookings = getBookings(getSheet()).filter(function(booking) {
-    return booking.date >= today && booking.status === "Ожидает подтверждения" &&
-      props.getProperty("BOOKING_SOURCE_"+booking.id) === "site" &&
-      !props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
-  }).sort(function(a,b) { return (a.date+a.time).localeCompare(b.date+b.time); });
+  const bookings = getBookings(getSheet()).filter(needsStaffContact)
+    .sort(function(a,b) { return (a.date+a.time).localeCompare(b.date+b.time); });
   offset = Math.max(0,Math.min(Number(offset)||0,Math.max(0,Math.floor((bookings.length-1)/5)*5)));
   sendStaffTelegramMessage(chatId,"<b>☎️ Нужно связаться</b>\n" + (bookings.length
-    ? "Заявок с сайта без подключённого Telegram: " + bookings.length + ". Позвоните клиенту, согласуйте время и подтвердите запись."
-    : "Нет ожидающих подтверждения заявок с сайта без подключённого Telegram."));
+    ? "Требуют звонка: " + bookings.length + ". Позвоните клиенту, согласуйте время и подтвердите запись."
+    : "Нет заявок, требующих звонка."));
   bookings.slice(offset,offset+5).forEach(function(booking) { sendStaffBookingCard(chatId,booking); });
   const buttons = [];
   if (offset) buttons.push({text:"← Назад",callback_data:"admin_contact:"+Math.max(0,offset-5)});
   if (offset+5<bookings.length) buttons.push({text:"Далее →",callback_data:"admin_contact:"+(offset+5)});
   const rows = buttons.length ? [buttons] : [];
   rows.push([{text:"Обновить",callback_data:"admin_contact:0"},{text:"Главное меню",callback_data:"admin_home"}]);
-  sendStaffTelegramMessage(chatId,"После подтверждения, отмены или подключения Telegram заявка исчезнет из этого списка.",{inline_keyboard:rows});
+  sendStaffTelegramMessage(chatId,"Не дозвонились — отметьте попытку и позвоните позже. При ошибке Telegram после разговора нажмите «Клиент уведомлён по телефону».",{inline_keyboard:rows});
+}
+
+function getBookingDeliveryFailures(id) {
+  const props = PropertiesService.getScriptProperties();
+  return ["confirm","cancel","move","reminder"].filter(function(kind) { return Boolean(props.getProperty("BOOKING_DELIVERY_"+id+"_"+kind)); });
+}
+function needsStaffContact(booking) {
+  if (["Выполнена","Не пришёл"].includes(booking.status)) return false;
+  if (getBookingDeliveryFailures(booking.id).length) return true;
+  const props = PropertiesService.getScriptProperties();
+  return booking.date >= getDateAfterDays(0) && booking.status === "Ожидает подтверждения" &&
+    props.getProperty("BOOKING_SOURCE_"+booking.id) === "site" && !props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
+}
+function bookingContactHistory(booking) {
+  const labels = {confirm:"подтверждение",cancel:"отмена",move:"перенос",reminder:"напоминание"};
+  const failures = getBookingDeliveryFailures(booking.id);
+  let text = failures.length ? "⚠️ Telegram не подтвердил отправку: " + failures.map(function(k) { return labels[k]; }).join(", ") + ". Позвоните клиенту.\n" : "";
+  const attempted = PropertiesService.getScriptProperties().getProperty("BOOKING_CALL_"+booking.id);
+  if (attempted) text += "☎️ Не дозвонилась: " + Utilities.formatDate(new Date(Number(attempted)),Session.getScriptTimeZone(),"dd.MM.yyyy HH:mm") + "\n";
+  return text;
+}
+function deliverBookingNotification(booking,kind,text) {
+  const props = PropertiesService.getScriptProperties();
+  const chatId = props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
+  if (!chatId) return false;
+  const key = "BOOKING_DELIVERY_"+booking.id+"_"+kind;
+  let delivered = false;
+  try { sendClientBotMessage(chatId,text); delivered = true; }
+  catch (error) { console.error("Telegram не подтвердил отправку уведомления " + kind); }
+  try {
+    if (delivered) props.deleteProperty(key);
+    else {
+      const firstFailure = !props.getProperty(key);
+      props.setProperty(key,String(Date.now()));
+      if (firstFailure) {
+        const recipients = Array.from(new Set([props.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY),props.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY)].filter(Boolean)));
+        recipients.forEach(function(id) {
+          try { sendStaffTelegramMessage(id,"⚠️ Не удалось отправить клиенту уведомление. Запись добавлена в «☎️ Нужно связаться».\n"+staffBookingCardText(booking),staffBookingButtons(booking)); }
+          catch (error) { console.error("Не доставлено предупреждение сотруднику"); }
+        });
+      }
+    }
+  } catch (error) { console.error("Не удалось сохранить результат доставки уведомления"); }
+  return delivered;
 }
