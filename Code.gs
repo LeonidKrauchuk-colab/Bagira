@@ -700,12 +700,7 @@ function createBooking(data, clientChatId) {
 
 
     // Телефон сохраняем как текст
-    sheet
-      .getRange(
-        nextRow,
-        3
-      )
-      .setNumberFormat("@");
+    formatBookingCell(sheet, nextRow, 3, "@");
 
 
     // Записываем строку
@@ -738,14 +733,7 @@ function createBooking(data, clientChatId) {
 
 
     // Формат даты создания
-    sheet
-      .getRange(
-        nextRow,
-        10
-      )
-      .setNumberFormat(
-        "dd.MM.yyyy HH:mm:ss"
-      );
+    formatBookingCell(sheet, nextRow, 10, "dd.MM.yyyy HH:mm:ss");
 
 
     // --------------------------------------------------------
@@ -922,12 +910,7 @@ function addAdminBookingLocked(data, bookingId) {
       sheet.getLastRow() + 1;
 
 
-    sheet
-      .getRange(
-        nextRow,
-        3
-      )
-      .setNumberFormat("@");
+    formatBookingCell(sheet, nextRow, 3, "@");
 
 
     sheet
@@ -942,14 +925,7 @@ function addAdminBookingLocked(data, bookingId) {
       ]);
 
 
-    sheet
-      .getRange(
-        nextRow,
-        10
-      )
-      .setNumberFormat(
-        "dd.MM.yyyy HH:mm:ss"
-      );
+    formatBookingCell(sheet, nextRow, 10, "dd.MM.yyyy HH:mm:ss");
 
 
     return {
@@ -1133,12 +1109,7 @@ function updateAdminBookingInternalLocked(data) {
     data.phone !== undefined
   ) {
 
-    sheet
-      .getRange(
-        rowNumber,
-        3
-      )
-      .setNumberFormat("@");
+    formatBookingCell(sheet, rowNumber, 3, "@");
 
     sheet
       .getRange(
@@ -2104,7 +2075,7 @@ function sendStaffTelegramMessage(chatId, text, markup) {
   return telegramApiCall("sendMessage", {
     chat_id: String(chatId), text: text, parse_mode: "HTML",
     reply_markup: markup || {
-      keyboard: [["➕ Добавить запись", "🔎 Найти клиента"], ["📅 Сегодня", "📅 Завтра"], ["🗓 Выбрать дату"], ["⏳ Ожидают подтверждения"], ["🕐 Свободные окна", "⚙️ Расписание"]],
+      keyboard: [["➕ Добавить запись", "🔎 Найти клиента"], ["📅 Сегодня", "📅 Завтра"], ["🗓 Выбрать дату"], ["⏳ Ожидают подтверждения", "☎️ Нужно связаться"], ["🕐 Свободные окна", "⚙️ Расписание"]],
       resize_keyboard: true
     }
   }, true);
@@ -2131,12 +2102,14 @@ function handleStaffTelegramMessage(message, event) {
     return {success:true};
   }
   if (["/start","/menu","Отмена","Главное меню"].includes(text)) { staffBotMenu(chatId); return {success:true}; }
-  if (!actions[text] && !["🗓 Выбрать дату","🕐 Свободные окна","/slots","⚙️ Расписание"].includes(text)) {
+  if (!actions[text] && !["🗓 Выбрать дату","🕐 Свободные окна","/slots","⚙️ Расписание","☎️ Нужно связаться"].includes(text)) {
     if (advanceStaffDialog(chatId,message)) return {success:true};
   }
   withBookingLock(function() { clearStaffDialog(chatId); });
   if (actions[text]) {
     sendStaffBookings(chatId, actions[text], 0);
+  } else if (text === "☎️ Нужно связаться") {
+    sendStaffContactQueue(chatId,0);
   } else if (text === "⚙️ Расписание") {
     sendStaffCalendar(chatId, getDateAfterDays(0).slice(0,7), null, true);
   } else if (text === "🗓 Выбрать дату") {
@@ -2606,6 +2579,12 @@ function processStaffTelegramCallback(callback) {
   const chatId = String(callback.message.chat.id);
   const data = String(callback.data || "");
   let match;
+  if ((match = data.match(/^admin_contact:(\d{1,6})$/))) {
+    answerTelegramCallback(callback.id,"Загружаю записи…");
+    sendStaffContactQueue(chatId,Number(match[1]));
+    return {success:true};
+  }
+
   if ((match = data.match(/^admin_visit:(done|missed|active):([\w-]+)$/))) {
     const result = setStaffVisitStatus(match[2], match[1]);
     answerStaffSavedAction(callback.id, result, "Статус сохранён");
@@ -3654,4 +3633,34 @@ function connectWebsiteBooking(chatId, token) {
     "\n📅 " + formatDateForTelegram(booking.date) + " в " + escapeTelegram(booking.time) + "\nСтатус: " + escapeTelegram(booking.status));
   editTelegramBookingMessages(booking,null,booking.status === "Активна" ? "confirm" : booking.status === "Отменена" ? "cancel" : "new");
   return {success:true};
+}
+
+// Типизированные столбцы Google Tables сами управляют форматом ячеек.
+function formatBookingCell(sheet,row,column,format) {
+  try { sheet.getRange(row,column).setNumberFormat(format); }
+  catch (error) {
+    const message = String(error && error.message || error);
+    if (!/столбца с заданным типом данных|typed column|column.*(?:specified|defined).*data type/i.test(message)) throw error;
+    console.log("Формат столбца " + column + " задан Google Таблицей; отдельное форматирование пропущено.");
+  }
+}
+function sendStaffContactQueue(chatId,offset) {
+  const props = PropertiesService.getScriptProperties();
+  const today = getDateAfterDays(0);
+  const bookings = getBookings(getSheet()).filter(function(booking) {
+    return booking.date >= today && booking.status === "Ожидает подтверждения" &&
+      props.getProperty("BOOKING_SOURCE_"+booking.id) === "site" &&
+      !props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
+  }).sort(function(a,b) { return (a.date+a.time).localeCompare(b.date+b.time); });
+  offset = Math.max(0,Math.min(Number(offset)||0,Math.max(0,Math.floor((bookings.length-1)/5)*5)));
+  sendStaffTelegramMessage(chatId,"<b>☎️ Нужно связаться</b>\n" + (bookings.length
+    ? "Заявок с сайта без подключённого Telegram: " + bookings.length + ". Позвоните клиенту, согласуйте время и подтвердите запись."
+    : "Нет ожидающих подтверждения заявок с сайта без подключённого Telegram."));
+  bookings.slice(offset,offset+5).forEach(function(booking) { sendStaffBookingCard(chatId,booking); });
+  const buttons = [];
+  if (offset) buttons.push({text:"← Назад",callback_data:"admin_contact:"+Math.max(0,offset-5)});
+  if (offset+5<bookings.length) buttons.push({text:"Далее →",callback_data:"admin_contact:"+(offset+5)});
+  const rows = buttons.length ? [buttons] : [];
+  rows.push([{text:"Обновить",callback_data:"admin_contact:0"},{text:"Главное меню",callback_data:"admin_home"}]);
+  sendStaffTelegramMessage(chatId,"После подтверждения, отмены или подключения Telegram заявка исчезнет из этого списка.",{inline_keyboard:rows});
 }
