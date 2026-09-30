@@ -84,7 +84,7 @@ async function submit(result) {
   await assert.rejects(submit({success:true}), /не подтвердил/);
   assert.equal(await submit({success:true,id:'booking-id'}), true);
   for (const [file, current, obsolete] of [
-    ['service-worker.js','bagira-static-v10','bagira-static-v9'],
+    ['service-worker.js','bagira-static-v11','bagira-static-v10'],
     ['admin/service-worker.js','bagira-admin-v10','bagira-admin-v9']
   ]) {
     const events = {}, deleted = [];

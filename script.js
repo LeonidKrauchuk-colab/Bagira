@@ -613,6 +613,14 @@ async function loadBusyTimes() {
       }
     );
 
+    if (!selectedDayIsClosed && selectedDate && dateWarning) {
+      const noFreeTimes = !Array.from(timeButtons).some(button => !button.disabled);
+      dateWarning.textContent = noFreeTimes
+        ? "На выбранную дату свободных записей нет. Пожалуйста, выберите другую дату."
+        : "";
+      dateWarning.style.display = noFreeTimes ? "block" : "none";
+    }
+
   }
 
   catch (error) {

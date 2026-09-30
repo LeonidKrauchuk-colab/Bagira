@@ -2810,6 +2810,7 @@ function handleClientTelegramCallback(callback,event) {
   if (!chat || chat.type!=="private" || String(chat.id)!==String(callback.from.id)) return {success:false,error:"Access denied"};
   const chatId=String(chat.id), data=String(callback.data||"");
   if (isTelegramStaff(callback.from,chat)) { answerTelegramCallback(callback.id,"Рабочее меню"); staffBotMenu(chatId); return {success:true}; }
+  if (/^client_(records|askcancel|confirmcancel|keep)/.test(data)) return handleClientRecordAction(callback,chatId,data);
   const nearest = data.match(/^client_slot:(\d{8}):(\d{4})$/);
   if (nearest) {
     const date=nearest[1].slice(0,4)+"-"+nearest[1].slice(4,6)+"-"+nearest[1].slice(6);
@@ -2935,20 +2936,70 @@ function createClientTelegramBooking(chatId, user, state, phone) {
   clientBotMenu(chatId, "Вы можете посмотреть другие свободные окна или свои записи.");
 }
 
-function sendClientBookings(chatId) {
-  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-  const rows = getBookings(getSheet()).filter(function(booking) {
-    return booking.date >= today && ["Активна","Ожидает подтверждения"].includes(booking.status) &&
-      String(PropertiesService.getScriptProperties().getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id) || "") === String(chatId);
-  }).sort(function(a, b) { return (a.date + a.time).localeCompare(b.date + b.time); });
-  if (!rows.length) {
-    sendClientBotMessage(chatId, "У вас нет будущих записей через бота.");
-    return;
+function clientOwnsBooking(chatId,booking) {
+  return Boolean(booking && String(PropertiesService.getScriptProperties().getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id) || "") === String(chatId));
+}
+function clientBookingCanCancel(booking) {
+  return booking && ["Активна","Ожидает подтверждения"].includes(booking.status) && !bookingHasStarted(booking);
+}
+function clientBookingText(booking) {
+  return "💅 "+escapeTelegram(booking.service)+"\n📅 "+staffDateLabel(booking.date)+" в "+escapeTelegram(booking.time)+"\nСтатус: "+escapeTelegram(booking.status);
+}
+function sendClientBookings(chatId,offset) {
+  const rows=getBookings(getSheet()).filter(function(b) {return clientOwnsBooking(chatId,b) && ["Активна","Ожидает подтверждения"].includes(b.status) && b.date>=getDateAfterDays(0);})
+    .sort(function(a,b){return (a.date+a.time).localeCompare(b.date+b.time);});
+  offset=Math.max(0,Math.min(Number(offset)||0,Math.max(0,Math.floor((rows.length-1)/5)*5)));
+  if(!rows.length) {sendClientBotMessage(chatId,"У вас нет предстоящих записей, подключённых к этому Telegram-аккаунту.");return;}
+  sendClientBotMessage(chatId,"<b>Мои записи</b> — "+rows.length);
+  rows.slice(offset,offset+5).forEach(function(b) {
+    const buttons=clientBookingCanCancel(b) ? [[{text:"Отменить запись",callback_data:"client_askcancel:"+b.id}]] : [];
+    sendClientBotMessage(chatId,clientBookingText(b),{reply_markup:{inline_keyboard:buttons}});
+  });
+  const nav=[];
+  if(offset)nav.push({text:"← Назад",callback_data:"client_records:"+Math.max(0,offset-5)});
+  if(offset+5<rows.length)nav.push({text:"Далее →",callback_data:"client_records:"+(offset+5)});
+  nav.push({text:"Обновить",callback_data:"client_records:0"});
+  sendClientBotMessage(chatId,"Выберите действие в карточке записи.",{reply_markup:{inline_keyboard:[nav]}});
+}
+function handleClientRecordAction(callback,chatId,data) {
+  let match;
+  if((match=data.match(/^client_records:(\d{1,6})$/))) {answerTelegramCallback(callback.id,"Ваши записи");sendClientBookings(chatId,Number(match[1]));return {success:true};}
+  if((match=data.match(/^client_askcancel:([\w-]+)$/))) {
+    const booking=findBookingById(match[1]);
+    if(!clientOwnsBooking(chatId,booking) || !clientBookingCanCancel(booking)) {answerTelegramCallback(callback.id,"Запись недоступна для отмены. Обновите список.",true);return {success:false};}
+    const token=Utilities.getUuid().replace(/-/g,"").slice(0,16);
+    CacheService.getScriptCache().put("CLIENT_CANCEL_"+token,JSON.stringify({chatId:chatId,id:booking.id,revision:staffBookingRevision(booking)}),600);
+    answerTelegramCallback(callback.id,"Подтвердите отмену");
+    sendClientBotMessage(chatId,"<b>Отменить эту запись?</b>\n"+clientBookingText(booking),{reply_markup:{inline_keyboard:[
+      [{text:"Да, отменить",callback_data:"client_confirmcancel:"+token}],
+      [{text:"Нет, оставить",callback_data:"client_keep:"+token}]
+    ]}});return {success:true};
   }
-  const text = rows.map(function(booking) {
-    return "💅 " + escapeTelegram(booking.service) + "\n📅 " + formatDateForTelegram(booking.date) + " в " + escapeTelegram(booking.time) + "\nСтатус: " + escapeTelegram(booking.status);
-  }).join("\n\n");
-  sendClientBotMessage(chatId, "<b>Ваши записи:</b>\n\n" + text);
+  if((match=data.match(/^client_(confirmcancel|keep):([a-f0-9]{16})$/))) {
+    const result=withBookingLock(function() {
+      const cache=CacheService.getScriptCache(),key="CLIENT_CANCEL_"+match[2],raw=cache.get(key);
+      if(!raw)return {success:false,error:"Кнопка устарела или действие уже выполнено. Обновите список."};
+      const state=JSON.parse(raw);
+      if(state.chatId!==chatId)return {success:false,error:"Доступ запрещён"};
+      if(match[1]==="keep") {cache.remove(key);return {success:true,kept:true};}
+      const b=findBookingById(state.id);
+      if(!clientOwnsBooking(chatId,b) || !clientBookingCanCancel(b) || staffBookingRevision(b)!==state.revision) return {success:false,error:"Запись изменилась. Обновите список и проверьте дату и время."};
+      getSheet().getRange(b.rowNumber,9).setValue("Отменена");b.status="Отменена";
+      cache.remove(key);return {success:true,booking:b};
+    });
+    answerStaffSavedAction(callback.id,result,result.kept ? "Запись сохранена" : "Запись отменена");
+    if(result.success && result.booking) {
+      const b=result.booking;
+      editTelegramBookingMessages(b,null,"cancel");
+      const props=PropertiesService.getScriptProperties();
+      Array.from(new Set([props.getProperty(ADMIN_TELEGRAM_USER_ID_PROPERTY),props.getProperty(MASTER_TELEGRAM_USER_ID_PROPERTY)].filter(Boolean))).forEach(function(id) {
+        try {sendStaffTelegramMessage(id,"❌ Клиент отменил запись\n"+staffBookingCardText(b));}catch(error){console.error("Не доставлено уведомление об отмене клиентом");}
+      });
+      try {sendClientBotMessage(chatId,"Запись отменена.\n"+clientBookingText(b));}catch(error){console.error("Отмена сохранена, ответ клиенту не доставлен");}
+    }
+    return result;
+  }
+  answerTelegramCallback(callback.id,"Кнопка устарела",true);return {success:false};
 }
 
 function sendClientBookingStatus(booking, outcome) {

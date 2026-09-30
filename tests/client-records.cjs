@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
+const props={BOOKING_CLIENT_CHAT_b:'7'},cache=new Map(),messages=[];let locked=false,writes=0;
+const b={id:'b',rowNumber:2,date:'2026-10-10',time:'10:00',status:'Активна',service:'Маникюр'};
+const c=vm.createContext({console,Utilities:{getUuid:()=>crypto.randomUUID()},PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]})},CacheService:{getScriptCache:()=>({get:k=>cache.get(k),put:(k,v)=>cache.set(k,v),remove:k=>cache.delete(k)})},LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},SpreadsheetApp:{flush(){}}});
+vm.runInContext(fs.readFileSync('Code.gs','utf8'),c);
+c.findBookingById=()=>({...b});c.bookingHasStarted=()=>false;c.sendClientBotMessage=(_,text,options)=>messages.push({text,options});c.answerTelegramCallback=()=>{};c.editTelegramBookingMessages=()=>{};
+c.getSheet=()=>({getRange:()=>({setValue(v){assert.ok(locked);writes++;b.status=v;}})});
+const press=(data,chat='7')=>c.handleClientRecordAction({id:'cb'},chat,data);
+const ask=()=>{assert.equal(press('client_askcancel:b').success,true);return messages.at(-1).options.reply_markup.inline_keyboard[0][0].callback_data;};
+assert.equal(press('client_askcancel:b','8').success,false);
+let confirm=ask();assert.equal(writes,0);assert.equal(press(confirm,'8').success,false);
+b.time='12:00';assert.equal(press(confirm).success,false,'changed appointment needs fresh consent');assert.equal(writes,0);
+confirm=ask();assert.equal(press(confirm.replace('confirmcancel','keep')).success,true);assert.equal(press(confirm).success,false);assert.equal(writes,0);
+confirm=ask();assert.equal(press(confirm).success,true);assert.equal(b.status,'Отменена');assert.equal(writes,1);assert.equal(press(confirm).success,false);assert.equal(writes,1);
+b.status='Активна';c.bookingHasStarted=()=>true;assert.equal(press('client_askcancel:b').success,false);
+console.log('Client cancellation passed: ownership, confirmation, revision, keep, repeated click, past visit and locked write.');
