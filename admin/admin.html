@@ -851,7 +851,6 @@
         <p id="workbenchStatus" role="status" aria-live="polite"></p>
         <div id="todayOverview"></div>
         <div class="workbench-tabs">
-          <button type="button" data-view="day">Расписание дня</button>
           <button type="button" data-view="pending">Ожидают подтверждения</button>
           <button type="button" data-view="contact">Нужно связаться</button>
         </div>
@@ -859,6 +858,11 @@
         <input id="clientSearch" type="search" placeholder="Имя или телефон" autocomplete="off">
         <div id="workbenchResults"></div>
       </section>
+      <details class="workbench-panel" id="daySchedule">
+        <summary>Расписание дня</summary>
+        <h2 id="selectedDayHeading"></h2>
+        <div id="bookingsContainer"></div>
+      </details>
       <details class="workbench-panel" id="scheduleSettingsDetails">
         <summary id="scheduleSettingsToggle">Настройки расписания</summary>
         <div id="scheduleSettingsPanel" style="padding-top:14px">
@@ -932,8 +936,7 @@
        ЗАПИСИ
   ========================== -->
 
-      <h2 id="selectedDayHeading"></h2>
-      <div id="bookingsContainer"></div>
+
 
 
     </div>
@@ -2747,8 +2750,6 @@
       const query=document.getElementById("clientSearch").value.trim().toLowerCase(),digits=query.replace(/\D/g,"");
       const host=document.getElementById("workbenchResults");host.replaceChildren();
       document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute("aria-pressed",String(!query && b.dataset.view===workbenchView)));
-      bookingsContainer.hidden=Boolean(query)||workbenchView!=="day";
-      document.getElementById("selectedDayHeading").hidden=bookingsContainer.hidden;
       if(!query && workbenchView==="day")return;
       const rows=workbenchBookings.filter(b=>query ? (String(b.name||"").toLowerCase().includes(query) || digits.length>=4 && String(b.phone||"").replace(/\D/g,"").includes(digits)) : workbenchView==="contact" ? b.contactNeeded : b.status==="Ожидает подтверждения"&&b.date>=serverToday).sort((a,b)=>(query ? -1 : 1)*(a.date+a.time).localeCompare(b.date+b.time));
       const heading=document.createElement("p");heading.textContent=`Найдено: ${rows.length}`;host.append(heading);
@@ -2757,7 +2758,7 @@
       more.onclick=append;host.append(more);append();
     }
     document.getElementById("clientSearch").addEventListener("input",renderWorkbenchResults);
-    document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>{workbenchView=button.dataset.view;document.getElementById("clientSearch").value="";renderWorkbenchResults();});
+    document.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>{workbenchView=workbenchView===button.dataset.view ? "day" : button.dataset.view;document.getElementById("clientSearch").value="";renderWorkbenchResults();});
     function renderWorkloadCalendar(){
       const host=document.getElementById("workloadCalendar");host.replaceChildren();if(!calendarMonth)calendarMonth=(selectedDate.value||serverToday).slice(0,7);
       const nav=document.createElement("div");nav.className="workbench-tabs";
@@ -2765,12 +2766,12 @@
       const grid=document.createElement("div");grid.className="workload-grid";host.append(grid);
       const first=new Date(calendarMonth+"-01T12:00:00"),count=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
       for(let n=1;n<=count;n++){const date=calendarMonth+"-"+String(n).padStart(2,"0"),busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена").length,free=freeDayTimes(date).length,closed=closedDays.includes(date)||!rawDayTimes(date).length;
-        const button=document.createElement("button");button.type="button";button.className=date<serverToday||closed?"day-closed":free?"day-open":"day-full";button.textContent=`${n} · ${busy} записей · ${closed?"выходной":free+" окон"}`;button.setAttribute("aria-pressed",String(date===selectedDate.value));button.onclick=()=>{selectedDate.value=date;workbenchView="day";document.getElementById("clientSearch").value="";loadBookings();};grid.append(button);}
+        const button=document.createElement("button");button.type="button";button.className=date<serverToday||closed?"day-closed":free?"day-open":"day-full";button.textContent=`${n} · ${busy} записей · ${closed?"выходной":free+" окон"}`;button.setAttribute("aria-pressed",String(date===selectedDate.value));button.onclick=()=>{selectedDate.value=date;document.getElementById("daySchedule").open=true;workbenchView="day";document.getElementById("clientSearch").value="";loadBookings();};grid.append(button);}
     }
     function renderDayControls(){
       const host=document.getElementById("daySlotControls");host.replaceChildren();const date=selectedDate.value;
       const day=document.createElement("button");day.type="button";day.textContent=closedDays.includes(date)?"Убрать выходной "+formatDate(date):"Сделать выходным "+formatDate(date);
-      day.onclick=async()=>{const busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена");if(!closedDays.includes(date)&&busy.length){workbenchMessage("Сначала перенесите или отмените записи: "+busy.map(b=>b.time+" — "+b.name).join(", "));workbenchView="day";document.getElementById("clientSearch").value="";renderWorkbenchResults();return;}if(!confirm(day.textContent+"?"))return;day.disabled=true;try{const saved=await saveClosedDays(closedDays.includes(date)?closedDays.filter(d=>d!==date):[...closedDays,date]);await loadBookings();workbenchMessage(saved ? "Выходные сохранены." : closedDaysError.textContent || "Не удалось сохранить выходной.");}finally{day.disabled=false;}};host.append(day);
+      day.onclick=async()=>{const busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена");if(!closedDays.includes(date)&&busy.length){workbenchMessage("Сначала перенесите или отмените записи: "+busy.map(b=>b.time+" — "+b.name).join(", "));workbenchView="day";document.getElementById("daySchedule").open=true;document.getElementById("clientSearch").value="";renderWorkbenchResults();return;}if(!confirm(day.textContent+"?"))return;day.disabled=true;try{const saved=await saveClosedDays(closedDays.includes(date)?closedDays.filter(d=>d!==date):[...closedDays,date]);await loadBookings();workbenchMessage(saved ? "Выходные сохранены." : closedDaysError.textContent || "Не удалось сохранить выходной.");}finally{day.disabled=false;}};host.append(day);
       for(const time of [...new Set([...rawDayTimes(date),...(closedSlots[date]||[])])].sort()){
         const closed=(closedSlots[date]||[]).includes(time),busy=workbenchBookings.some(b=>b.date===date&&b.time===time&&b.status!=="Отменена"),button=document.createElement("button");button.type="button";button.textContent=time+" — "+(busy?"занято":closed?"открыть":"закрыть");button.disabled=busy||closedDays.includes(date)||date<serverToday||date===serverToday&&time<=serverTime;button.onclick=async()=>{button.disabled=true;try{await workbenchRequest("slot",{date,time,closed:!closed});await loadBookings();workbenchMessage("Расписание сохранено.");}catch(error){showError(error.message);button.disabled=false;}};host.append(button);
       }
