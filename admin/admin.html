@@ -739,7 +739,6 @@
     .workbench-panel button,.card-actions button,.card-actions a,.move-dialog button,.add-booking-button {min-height:44px;padding:10px 14px;border:1px solid #c5a6af;border-radius:10px;background:#f8f1f3;color:#56343d;font:inherit;cursor:pointer;text-decoration:none;}
     .workbench-tabs [aria-pressed="true"] {background:#81565d;color:white;}
     #clientSearch {display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px;}
-    #todayOverview {font-weight:600;line-height:1.6;}
     #workbenchStatus {color:#245c39;line-height:1.5;}
     #workbenchResults .booking {margin:12px 0;}
     .contact-warning {color:#a62218;}
@@ -790,6 +789,10 @@
     details.workbench-panel > summary:focus-visible {outline:3px solid #81565d;outline-offset:4px;}
     @media(max-width:600px){.header-statistics {gap:12px;font-size:13px;}}
     @media(max-width:360px){.header-statistics {gap:8px;font-size:12px;}}
+    .statistics-spinner {display:inline-block;width:12px;height:12px;border:2px solid #ffffff60;border-top-color:white;border-radius:50%;vertical-align:middle;animation:statistics-spin .8s linear infinite;}
+    #statisticsLoading {font-size:12px;}
+    @keyframes statistics-spin {to {transform:rotate(360deg);}}
+    @media(prefers-reduced-motion:reduce){.statistics-spinner {animation:none;}}
   </style>
 
 </head>
@@ -838,9 +841,9 @@
 
         </div>
         <div class="header-statistics" aria-label="Статистика выбранного дня" aria-live="polite">
-          <span>Занято — <strong id="activeCount">0</strong></span>
-          <span>Свободно — <strong id="freeCount">0</strong></span>
-          <span>Окон — <strong id="totalCount">0</strong></span>
+          <span>Занято — <strong id="activeCount">—</strong></span>
+          <span>Свободно — <strong id="freeCount">—</strong></span>
+          <span id="statisticsLoading" hidden><span class="statistics-spinner" aria-hidden="true"></span> Загрузка…</span>
         </div>
       </header>
     <div class="container">
@@ -849,7 +852,6 @@
 
       <section class="workbench-panel" aria-label="Рабочий день">
         <p id="workbenchStatus" role="status" aria-live="polite"></p>
-        <div id="todayOverview"></div>
         <div class="workbench-tabs">
           <button type="button" data-view="pending">Ожидают подтверждения</button>
           <button type="button" data-view="contact">Нужно связаться</button>
@@ -1224,7 +1226,6 @@
 
     function updateWorkTimesForSelectedDate() {
       WORK_TIMES = buildWorkTimes(scheduleSettings, selectedDate.value);
-      document.getElementById("totalCount").textContent = WORK_TIMES.length;
     }
 
     function formatClosedDay(date) {
@@ -1413,11 +1414,6 @@
       document.getElementById(
         "freeCount"
       );
-    const totalCount =
-      document.getElementById(
-        "totalCount"
-      );
-
     const lastUpdated =
       document.getElementById(
         "lastUpdated"
@@ -1715,6 +1711,9 @@
       const requestVersion=++bookingLoadVersion;
       const requestToken = ADMIN_SESSION_TOKEN;
       if (!requestToken) return;
+      activeCount.textContent=freeCount.textContent="—";
+      document.getElementById("statisticsLoading").hidden=false;
+      document.querySelector(".header-statistics").setAttribute("aria-busy","true");
       updateWorkTimesForSelectedDate();
 
       hideError();
@@ -1852,8 +1851,6 @@
 
         freeCount.textContent =
           freeDayTimes(date).length;
-        totalCount.textContent =
-          WORK_TIMES.length;
 
         renderWorkbench();
         const now = new Date();
@@ -1870,6 +1867,8 @@
           );
 
       } catch (error) {
+        if(ADMIN_SESSION_TOKEN!==requestToken || requestVersion!==bookingLoadVersion)return;
+        activeCount.textContent=freeCount.textContent="—";
 
         console.error(error);
 
@@ -1880,6 +1879,11 @@
           error.message
         );
 
+      } finally {
+        if(requestVersion===bookingLoadVersion) {
+          document.getElementById("statisticsLoading").hidden=true;
+          document.querySelector(".header-statistics").setAttribute("aria-busy","false");
+        }
       }
 
     }
@@ -2563,7 +2567,7 @@
 
 
     function closeAdminSession(message) {
-      workbenchBookings=[];["workbenchResults","todayOverview","workloadCalendar","daySlotControls","workbenchStatus"].forEach(id=>document.getElementById(id).replaceChildren());document.getElementById("clientSearch").value="";document.querySelectorAll(".move-dialog").forEach(d=>d.remove());
+      workbenchBookings=[];["workbenchResults","workloadCalendar","daySlotControls","workbenchStatus"].forEach(id=>document.getElementById(id).replaceChildren());document.getElementById("clientSearch").value="";document.querySelectorAll(".move-dialog").forEach(d=>d.remove());
       ADMIN_SESSION_TOKEN = "";
       clearTimeout(adminSessionTimer);
       document.getElementById("adminApp").style.display = "none";
@@ -2739,9 +2743,6 @@
     function rawDayTimes(date){return scheduleSettings.weeklySchedule.find(d=>d.day===new Date(date+"T12:00:00").getDay())?.slots || [];}
     function freeDayTimes(date){const limit=new Date(serverToday+"T12:00:00");limit.setDate(limit.getDate()+Number(scheduleSettings.bookingDays));const last=limit.getFullYear()+"-"+String(limit.getMonth()+1).padStart(2,"0")+"-"+String(limit.getDate()).padStart(2,"0");return date>last || closedDays.includes(date) ? [] : buildWorkTimes(scheduleSettings,date).filter(t=>(date>serverToday || date===serverToday && t>serverTime) && !workbenchBookings.some(b=>b.date===date && b.time===t && b.status!=="Отменена"));}
     function renderWorkbench(){
-      const today=workbenchBookings.filter(b=>b.date===serverToday && ["Активна","Ожидает подтверждения"].includes(b.status));
-      const next=today.filter(b=>b.time>=serverTime).sort((a,b)=>a.time.localeCompare(b.time))[0];
-      document.getElementById("todayOverview").textContent=`Сегодня: ${today.length} записей · ${freeDayTimes(serverToday).length} свободных окон. `+(next ? `Ближайший клиент: ${next.name}, ${next.time}.` : "Предстоящих визитов сегодня нет.");
       document.querySelector('[data-view="pending"]').textContent="Ожидают подтверждения · "+workbenchBookings.filter(b=>b.status==="Ожидает подтверждения"&&b.date>=serverToday).length;
       document.querySelector('[data-view="contact"]').textContent="Нужно связаться · "+workbenchBookings.filter(b=>b.contactNeeded).length;
       renderWorkbenchResults();renderWorkloadCalendar();renderDayControls();
