@@ -2767,7 +2767,7 @@
       const grid=document.createElement("div");grid.className="workload-grid";host.append(grid);
       const first=new Date(calendarMonth+"-01T12:00:00"),count=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
       for(let n=1;n<=count;n++){const date=calendarMonth+"-"+String(n).padStart(2,"0"),busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена").length,free=freeDayTimes(date).length,closed=closedDays.includes(date)||!rawDayTimes(date).length;
-        const button=document.createElement("button");button.type="button";button.className=date<serverToday||closed?"day-closed":free?"day-open":"day-full";button.textContent=`${n} · ${busy} записей · ${closed?"выходной":free+" окон"}`;button.setAttribute("aria-pressed",String(date===selectedDate.value));button.onclick=()=>{selectedDate.value=date;document.getElementById("daySchedule").open=true;workbenchView="day";document.getElementById("clientSearch").value="";loadBookings();};grid.append(button);}
+        const button=document.createElement("button");button.type="button";button.className=date<serverToday||closed?"day-closed":free?"day-open":"day-full";button.textContent=`${n} · ${busy} записей · ${closed?"выходной":free+" окон"}`;button.setAttribute("aria-pressed",String(date===selectedDate.value));button.onclick=()=>{selectedDate.value=date;updateTodayButton();document.getElementById("daySchedule").open=true;workbenchView="day";document.getElementById("clientSearch").value="";loadBookings();};grid.append(button);}
     }
     function renderDayControls(){
       const host=document.getElementById("daySlotControls");host.replaceChildren();const date=selectedDate.value;

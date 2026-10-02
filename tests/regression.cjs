@@ -85,7 +85,7 @@ async function submit(result) {
   assert.equal(await submit({success:true,id:'booking-id'}), true);
   for (const [file, current, obsolete] of [
     ['service-worker.js','bagira-static-v14','bagira-static-v13'],
-    ['admin/service-worker.js','bagira-admin-v16','bagira-admin-v15']
+    ['admin/service-worker.js','bagira-admin-v17','bagira-admin-v16']
   ]) {
     const events = {}, deleted = [];
     const other = current.startsWith('bagira-admin') ? 'bagira-static-v9' : 'bagira-admin-v8';
