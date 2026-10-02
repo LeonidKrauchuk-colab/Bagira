@@ -737,6 +737,7 @@
     .workbench-panel {background:white;border-radius:16px;padding:18px;margin:18px 0;}
     .workbench-tabs,.card-actions,#daySlotControls {display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;}
     .workbench-panel button,.card-actions button,.card-actions a,.move-dialog button,.add-booking-button {min-height:44px;padding:10px 14px;border:1px solid #c5a6af;border-radius:10px;background:#f8f1f3;color:#56343d;font:inherit;cursor:pointer;text-decoration:none;}
+    #daySlotControls .slot-closed {background:#81565d;color:#fff;border-color:#81565d;}
     .workbench-tabs [aria-pressed="true"] {background:#81565d;color:white;}
     #clientSearch {display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:16px;}
     #workbenchStatus {color:#245c39;line-height:1.5;}
@@ -2774,7 +2775,7 @@
       const day=document.createElement("button");day.type="button";day.textContent=closedDays.includes(date)?"Убрать выходной "+formatDate(date):"Сделать выходным "+formatDate(date);
       day.onclick=async()=>{const busy=workbenchBookings.filter(b=>b.date===date&&b.status!=="Отменена");if(!closedDays.includes(date)&&busy.length){workbenchMessage("Сначала перенесите или отмените записи: "+busy.map(b=>b.time+" — "+b.name).join(", "));workbenchView="day";document.getElementById("daySchedule").open=true;document.getElementById("clientSearch").value="";renderWorkbenchResults();return;}if(!confirm(day.textContent+"?"))return;day.disabled=true;try{const saved=await saveClosedDays(closedDays.includes(date)?closedDays.filter(d=>d!==date):[...closedDays,date]);await loadBookings();workbenchMessage(saved ? "Выходные сохранены." : closedDaysError.textContent || "Не удалось сохранить выходной.");}finally{day.disabled=false;}};host.append(day);
       for(const time of [...new Set([...rawDayTimes(date),...(closedSlots[date]||[])])].sort()){
-        const closed=(closedSlots[date]||[]).includes(time),busy=workbenchBookings.some(b=>b.date===date&&b.time===time&&b.status!=="Отменена"),button=document.createElement("button");button.type="button";button.textContent=time+" — "+(busy?"занято":closed?"открыть":"закрыть");button.disabled=busy||closedDays.includes(date)||date<serverToday||date===serverToday&&time<=serverTime;button.onclick=async()=>{button.disabled=true;try{await workbenchRequest("slot",{date,time,closed:!closed});await loadBookings();workbenchMessage("Расписание сохранено.");}catch(error){showError(error.message);button.disabled=false;}};host.append(button);
+        const closed=(closedSlots[date]||[]).includes(time),busy=workbenchBookings.some(b=>b.date===date&&b.time===time&&b.status!=="Отменена"),button=document.createElement("button");button.type="button";button.classList.toggle("slot-closed",closed);button.textContent=time+" — "+(busy?"занято":closed?"открыть":"закрыть");button.disabled=busy||closedDays.includes(date)||date<serverToday||date===serverToday&&time<=serverTime;button.onclick=async()=>{button.disabled=true;try{await workbenchRequest("slot",{date,time,closed:!closed});await loadBookings();workbenchMessage("Расписание сохранено.");}catch(error){showError(error.message);button.disabled=false;}};host.append(button);
       }
     }
     async function openMoveDialog(booking){
