@@ -725,6 +725,12 @@ async function loadNearestAvailability() {
       timeLabel.textContent = slot.time;
       button.append(dateLabel, timeLabel);
       button.addEventListener("click", async () => {
+        if (bookingSuccess) bookingSuccess.style.display = "none";
+        if (bookingForm) bookingForm.style.display = "";
+        setAvailabilityPanelOpen(false);
+        document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (pendingWebsiteBooking) return;
+        selectedTimeInput.value = "";
         dateInput.value = slot.date;
         renderTimeButtons(slot.date);
         timeButtons.forEach(item => {
@@ -732,6 +738,7 @@ async function loadNearestAvailability() {
           item.classList.add("busy");
         });
         await loadBusyTimes();
+        if (pendingWebsiteBooking || dateInput.value !== slot.date) return;
         const timeButton = timeButtons.find(item => item.dataset.time === slot.time);
         if (!timeButton || timeButton.disabled) {
           availabilityCache = null;
@@ -741,10 +748,6 @@ async function loadNearestAvailability() {
         timeButtons.forEach(item => item.classList.remove("selected"));
         timeButton.classList.add("selected");
         selectedTimeInput.value = slot.time;
-        if (bookingSuccess) bookingSuccess.style.display = "none";
-        if (bookingForm) bookingForm.style.display = "";
-        setAvailabilityPanelOpen(false);
-        document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
         window.setTimeout(() => {
           if (!serviceInput) return;
           serviceInput.focus({ preventScroll: true });
