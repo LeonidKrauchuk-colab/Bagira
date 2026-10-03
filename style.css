@@ -3400,7 +3400,7 @@ button:disabled {
 
 /* Приглашение в Telegram перед формой записи */
 .bot-promo {
-  padding: 64px 0;
+  padding: 30px 0;
   background: #fff;
 }
 
