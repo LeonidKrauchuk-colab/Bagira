@@ -1656,6 +1656,19 @@ document
 
           event.preventDefault();
 
+          const requestedService = link.dataset.service;
+          if (href === "#booking" && requestedService && serviceInput) {
+            if (pendingWebsiteBooking || bookingSubmissionBusy) {
+              showError("Сначала завершите отправку текущей заявки. После этого можно выбрать другую услугу.");
+            } else if (Array.from(serviceInput.options).some(option => option.value === requestedService)) {
+              if (bookingSuccess) bookingSuccess.style.display = "none";
+              if (bookingForm) bookingForm.style.display = "";
+              serviceInput.value = requestedService;
+              serviceInput.removeAttribute("aria-invalid");
+              serviceInput.dispatchEvent(new Event("change", { bubbles: true }));
+              hideError();
+            }
+          }
 
           target.scrollIntoView({
 
