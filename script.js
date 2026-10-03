@@ -2689,3 +2689,69 @@ document.getElementById("clearDraft")?.addEventListener("click",()=>{
   if(pendingWebsiteBooking || bookingSubmissionBusy) {showError("Сначала проверьте отправку заявки, чтобы не создать повторную запись.");return;}
   bookingForm.reset();selectedTimeInput.value="";dateInput.value=bookingDateMin;renderTimeButtons();clearWebsiteDraft();document.getElementById("draftNotice").textContent="Форма очищена.";loadBusyTimes();loadBookingCalendar();
 });
+
+// Ближайшее окно: только актуальные публичные данные расписания.
+const nextOpening = document.getElementById("nextOpening");
+const nextOpeningBook = document.getElementById("nextOpeningBook");
+let nextOpeningSlot = null;
+let nextOpeningVersion = 0;
+async function refreshNextOpening() {
+  if (!nextOpening) return;
+  const version = ++nextOpeningVersion;
+  try {
+    const response = await fetch(`${SCRIPT_URL}?availability=1&t=${Date.now()}`, {cache:"no-store",signal:AbortSignal.timeout(20000)});
+    const result = await response.json();
+    if (!response.ok || !result.success || !Array.isArray(result.slots)) throw Error("Расписание недоступно");
+    if (version !== nextOpeningVersion) return;
+    nextOpeningSlot = result.slots[0] || null;
+    nextOpening.hidden = !nextOpeningSlot;
+    if (nextOpeningSlot) {
+      document.getElementById("nextOpeningDate").textContent = formatDateForDisplay(nextOpeningSlot.date) + " в " + nextOpeningSlot.time;
+    }
+  } catch (error) {
+    if (version !== nextOpeningVersion) return;
+    nextOpeningSlot = null;
+    nextOpening.hidden = true;
+  }
+}
+nextOpeningBook?.addEventListener("click", async () => {
+  const slot = nextOpeningSlot;
+  if (!slot) return;
+  const status = document.getElementById("nextOpeningStatus");
+  if (pendingWebsiteBooking || bookingSubmissionBusy) {
+    status.textContent = "Сначала завершите отправку текущей заявки в форме записи.";
+    document.getElementById("booking")?.scrollIntoView({behavior:"smooth",block:"start"});
+    return;
+  }
+  nextOpeningBook.disabled = true;
+  status.textContent = "Проверяем выбранное время…";
+  try {
+    if (bookingSuccess) bookingSuccess.style.display = "none";
+    if (bookingForm) bookingForm.style.display = "";
+    setAvailabilityPanelOpen(false);
+    hideError();
+    dateInput.value = slot.date;
+    selectedTimeInput.value = "";
+    renderTimeButtons(slot.date);
+    timeButtons.forEach(button => button.disabled = true);
+    document.getElementById("booking")?.scrollIntoView({behavior:"smooth",block:"start"});
+    await loadBusyTimes();
+    if (pendingWebsiteBooking || dateInput.value !== slot.date) return;
+    const button = timeButtons.find(item => item.dataset.time === slot.time && !item.disabled);
+    if (!button) {
+      showError("Не удалось подтвердить доступность этого времени. Выберите другое окно или повторите проверку расписания.");
+      await refreshNextOpening();
+      return;
+    }
+    button.click();
+    saveWebsiteDraft();
+    status.textContent = "Дата и время выбраны в форме записи.";
+  } finally {
+    nextOpeningBook.disabled = false;
+    if (status.textContent === "Проверяем выбранное время…") status.textContent = "";
+  }
+});
+refreshNextOpening();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !nextOpeningBook?.disabled) refreshNextOpening();
+});

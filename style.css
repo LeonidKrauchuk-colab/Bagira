@@ -3289,3 +3289,14 @@ button:disabled {cursor:wait;}
   .master-story p {font-size:15px;line-height:1.75;}
   .master-booking-link {font-size:14px;padding:18px 20px;}
 }
+
+.next-opening[hidden] {display:none;}
+.next-opening {padding:20px 0 40px;background:#faf5ef;}
+.next-opening-card {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px 32px;padding:30px 36px;border:1px solid #dfc5c2;border-radius:24px;background:linear-gradient(120deg,#fffaf5,#f2e3df);}
+.next-opening-label {margin:0 0 8px;color:#81565d;font-size:14px;}
+.next-opening h2 {margin:0 0 10px;font-family:"Cormorant Garamond",Georgia,serif;font-size:34px;color:#81565d;}
+.next-opening-date {margin:0;font-size:20px;font-weight:600;color:#56343d;}
+.next-opening-status {flex-basis:100%;margin:0;font-size:14px;color:#81565d;}
+.next-opening-status:empty {display:none;}
+.next-opening button:disabled {opacity:.65;cursor:wait;}
+@media(max-width:700px){.next-opening-card {padding:24px;}.next-opening h2 {font-size:30px;}.next-opening .main-button {width:100%;font-size:14px;}.next-opening-date {font-size:18px;}}
