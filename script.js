@@ -1294,6 +1294,8 @@ if (bookingForm) {
         }
 
         pendingWebsiteBooking=null;lockPendingWebsiteBooking(false);clearWebsiteDraft();
+        availabilityCache = null;
+        refreshNextOpening();
 
         // ==================================================
         // ПОКАЗ УСПЕШНОГО СООБЩЕНИЯ
@@ -2760,7 +2762,22 @@ nextOpeningBook?.addEventListener("click", async () => {
     if (status.textContent === "Проверяем выбранное время…") status.textContent = "";
   }
 });
-refreshNextOpening();
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && !nextOpeningBook?.disabled) refreshNextOpening();
+let nextOpeningRefreshTimer = null;
+function startNextOpeningRefresh() {
+  clearInterval(nextOpeningRefreshTimer);
+  nextOpeningRefreshTimer = null;
+  if (document.hidden || !nextOpening) return;
+  if (!nextOpeningBook?.disabled) refreshNextOpening();
+  nextOpeningRefreshTimer = setInterval(() => {
+    if (!document.hidden && !nextOpeningBook?.disabled) refreshNextOpening();
+  }, 30000);
+}
+startNextOpeningRefresh();
+document.addEventListener("visibilitychange", startNextOpeningRefresh);
+window.addEventListener("pagehide", () => {
+  clearInterval(nextOpeningRefreshTimer);
+  nextOpeningRefreshTimer = null;
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted) startNextOpeningRefresh();
 });
