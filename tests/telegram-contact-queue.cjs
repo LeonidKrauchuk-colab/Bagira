@@ -13,5 +13,5 @@ c.sendStaffBookingCard=(_,b)=>cards.push(b.id);c.sendStaffTelegramMessage=(_,tex
 c.sendStaffContactQueue('1',0);assert.equal(cards.length,5);assert.ok(messages.at(-1).markup.inline_keyboard.flat().some(b=>b.callback_data==='admin_contact:5'));
 cards.length=0;c.sendStaffContactQueue('1',5);assert.deepEqual(cards,['5','6']);
 rows[0].status='Активна';rows[1].status='Отменена';props.BOOKING_CLIENT_CHAT_2='123';props.BOOKING_SOURCE_3='bot';rows[4].date='2026-09-29';delete props.BOOKING_SOURCE_5;
-cards.length=0;c.sendStaffContactQueue('1',5);assert.deepEqual(cards,['6'],'filter and clamp after queue changes');
+cards.length=0;c.sendStaffContactQueue('1',5);assert.deepEqual(cards,['5','6'],'legacy unlinked bookings also need phone contact');
 console.log('Contact queue and typed-column handling passed.');

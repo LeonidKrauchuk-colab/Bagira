@@ -37,8 +37,7 @@ const nameInput =
 const phoneInput =
   document.getElementById("phone");
 
-const telegramInput =
-  document.getElementById("telegram");
+
 
 const commentInput =
   document.getElementById("comment");
@@ -1233,9 +1232,7 @@ if (bookingForm) {
           phoneInput.value,
 
         telegram:
-          telegramInput
-            ? telegramInput.value.trim()
-            : "",
+          "",
 
         comment:
           commentInput
@@ -1361,18 +1358,7 @@ if (bookingForm) {
         if (bookingDetails) {
           const notice = document.createElement("p");
           notice.textContent = "Для подтверждения или переноса записи мы свяжемся с вами по телефону.";
-          if (result.telegramLink && /^https:\/\/t\.me\/BagiraMasterBot\?start=booking_[a-f0-9]{32}$/.test(result.telegramLink)) {
-            notice.textContent = "Чтобы получать подтверждение, перенос и напоминания в Telegram, нажмите кнопку ниже, затем «Старт» в боте. До подключения мы свяжемся с вами по телефону. Ссылка действует 24 часа; не пересылайте её другим людям.";
-            const link = document.createElement("a");
-            link.href = result.telegramLink;
-            link.className = "main-button";
-            link.textContent = "Подключить уведомления в Telegram";
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-            bookingDetails.append(notice, link);
-          } else {
-            bookingDetails.append(notice);
-          }
+          bookingDetails.append(notice);
         }
 
         // Обновляем свободные времена
@@ -2601,7 +2587,7 @@ async function offerNearestSlot(forDate) {
 function reviewBooking(booking) {
   const dialog=document.getElementById("bookingReview"),details=document.getElementById("bookingReviewDetails");
   details.replaceChildren();
-  [["Услуга",booking.service],["Дата",formatDateForDisplay(booking.date)],["Время",booking.time],["Имя",booking.name],["Телефон",booking.phone],["Telegram",booking.telegram || "Не указан — свяжемся по телефону"],["Комментарий",booking.comment || "—"]].forEach(([label,value])=>{
+  [["Услуга",booking.service],["Дата",formatDateForDisplay(booking.date)],["Время",booking.time],["Имя",booking.name],["Телефон",booking.phone],["Комментарий",booking.comment || "—"]].forEach(([label,value])=>{
     const row=document.createElement("p"),title=document.createElement("strong");title.textContent=label+": ";row.append(title,document.createTextNode(value));details.append(row);
   });
   return new Promise(resolve=>{
@@ -2615,7 +2601,7 @@ function reviewBooking(booking) {
 
 const WEBSITE_DRAFT_KEY="bagira-booking-draft-v1";
 function websiteDraftValues() {
-  return Object.fromEntries(["service","date","selectedTime","name","phone","telegram","comment"].map(id=>[id,document.getElementById(id)?.value || ""]));
+  return Object.fromEntries(["service","date","selectedTime","name","phone","comment"].map(id=>[id,document.getElementById(id)?.value || ""]));
 }
 function saveWebsiteDraft() {
   try {localStorage.setItem(WEBSITE_DRAFT_KEY,JSON.stringify({values:websiteDraftValues(),pending:pendingWebsiteBooking,savedAt:Date.now()}));}catch(error){}
@@ -2635,11 +2621,11 @@ function restoreWebsiteDraft() {
     if(!saved)return;
     if(!saved.pending && Date.now()-saved.savedAt>86400000){clearWebsiteDraft();return;}
     for(const [id,value] of Object.entries(saved.values||{})) {
-      if(["service","date","selectedTime","name","phone","telegram","comment"].includes(id) && typeof value==="string")document.getElementById(id).value=value;
+      if(["service","date","selectedTime","name","phone","comment"].includes(id) && typeof value==="string")document.getElementById(id).value=value;
     }
     pendingWebsiteBooking=saved.pending || null;
     if(pendingWebsiteBooking) {
-      for(const [id,key] of [["service","service"],["date","date"],["selectedTime","time"],["name","name"],["phone","phone"],["telegram","telegram"],["comment","comment"]])document.getElementById(id).value=pendingWebsiteBooking[key] || "";
+      for(const [id,key] of [["service","service"],["date","date"],["selectedTime","time"],["name","name"],["phone","phone"],["comment","comment"]])document.getElementById(id).value=pendingWebsiteBooking[key] || "";
     }
     renderTimeButtons(dateInput.value);
     document.getElementById("draftNotice").textContent="Восстановлена незавершённая заявка. Свободность времени проверяется заново.";

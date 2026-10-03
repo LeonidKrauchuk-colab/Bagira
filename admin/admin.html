@@ -1879,7 +1879,7 @@
     function createActiveCard(booking) {
       const card=document.createElement("article");card.className="booking active-booking";
       const info=document.createElement("div");info.className="booking-info";
-      const source={site:"Сайт",bot:"Telegram-бот",manual:"Ручная / ранее созданная запись"}[booking.source] || "Не указан";
+      const source={site:"Сайт",bot:"Telegram-бот"}[booking.source] || "Сайт";
       [["Дата",formatDate(booking.date)+" · "+booking.time],["Клиент",booking.name],["Телефон",booking.phone],["Услуга",booking.service],["Статус",booking.status],["Источник",source],["Telegram",(booking.telegram || "Не указан")+(booking.telegramConnected ? " · уведомления подключены" : " · уведомления не подключены")],["Комментарий",booking.comment || "—"]].forEach(([label,value])=>{const row=document.createElement("p");const strong=document.createElement("strong");strong.textContent=label+": ";row.append(strong,document.createTextNode(value || ""));info.append(row);});
       if(booking.lastCall){const line=document.createElement("p");line.textContent="Не дозвонилась: "+new Date(Number(booking.lastCall)).toLocaleString("ru-RU",{timeZone:"Europe/Minsk"});info.append(line);}
       if(booking.deliveryFailures?.length){const line=document.createElement("p");line.className="contact-warning";line.textContent="Не отправлено: "+booking.deliveryFailures.map(k=>({confirm:"подтверждение",cancel:"отмена",move:"перенос",reminder:"напоминание"}[k]||k)).join(", ");info.append(line);}

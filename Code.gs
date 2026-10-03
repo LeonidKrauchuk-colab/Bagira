@@ -316,7 +316,7 @@ if (
 
   const props = PropertiesService.getScriptProperties();
   const bookings = getBookings(sheet).map(function(b) {
-    return Object.assign({},b,{source:props.getProperty("BOOKING_SOURCE_"+b.id)||"manual",telegramConnected:Boolean(props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+b.id)),contactNeeded:needsStaffContact(b),lastCall:props.getProperty("BOOKING_CALL_"+b.id)||"",deliveryFailures:getBookingDeliveryFailures(b.id),revision:staffBookingRevision(b),visitStarted:bookingHasStarted(b)});
+    return Object.assign({},b,{source:bookingSource(b),telegramConnected:Boolean(props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+b.id)),contactNeeded:needsStaffContact(b),lastCall:props.getProperty("BOOKING_CALL_"+b.id)||"",deliveryFailures:getBookingDeliveryFailures(b.id),revision:staffBookingRevision(b),visitStarted:bookingHasStarted(b)});
   });
 
   return jsonResponse({
@@ -571,6 +571,7 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
 
 
   try {
+    if (!clientChatId) data = Object.assign({}, data, {telegram:""});
     if (!clientChatId && data.requestId) {
       if (!/^[a-f0-9]{32}$/.test(data.requestId)) return {success:false,error:"Некорректный идентификатор заявки"};
       const existing=findBookingById("web-"+data.requestId);
@@ -750,12 +751,6 @@ function createBooking(data, clientChatId, draftToken, draftVersion) {
     const contactProperties = PropertiesService.getScriptProperties();
     contactProperties.setProperty("BOOKING_SOURCE_" + id, clientChatId ? "bot" : "site");
     let telegramLink = "";
-    if (!clientChatId && String(data.telegram || "").trim()) {
-      const token = Utilities.getUuid().replace(/-/g, "");
-      contactProperties.setProperty("BOOKING_LINK_" + token, JSON.stringify({id:id, expiresAt:Date.now()+86400000}));
-      telegramLink = "https://t.me/BagiraMasterBot?start=booking_" + token;
-      contactProperties.setProperty("BOOKING_SITE_LINK_"+id,telegramLink);
-    }
 
     if (clientChatId) {
       PropertiesService.getScriptProperties().setProperty(
@@ -858,7 +853,7 @@ function addAdminBooking(data) {
 }
 
 // Вызывается только под общей блокировкой записей.
-function addAdminBookingLocked(data, bookingId) {
+function addAdminBookingLocked(data, bookingId, source) {
     if (
       !data.name ||
       !data.phone ||
@@ -964,6 +959,7 @@ function addAdminBookingLocked(data, bookingId) {
       ]);
 
 
+    PropertiesService.getScriptProperties().setProperty("BOOKING_SOURCE_"+id, source === "bot" ? "bot" : "site");
     formatBookingCell(sheet, nextRow, 10, "dd.MM.yyyy HH:mm:ss");
 
 
@@ -2359,7 +2355,7 @@ function handleStaffCreationCallback(callback, action, token, value, extra) {
       else {
         if (!validStaffClientName(state.name) || !normalizeStaffClientPhone(state.phone) || !CLIENT_BOT_SERVICES.includes(state.service)) return {success:false,error:"Проверьте данные клиента."};
         if (!staffFreeTimes(state.date,null,getBookings(getSheet())).includes(state.time)) return {success:false,error:"Время занято или недоступно. Нажмите «Выбрать другое время»."};
-        const saved = addAdminBookingLocked({name:state.name,phone:state.phone,service:state.service,date:state.date,time:state.time,comment:"Добавлено сотрудником через Telegram"},state.bookingId);
+        const saved = addAdminBookingLocked({name:state.name,phone:state.phone,service:state.service,date:state.date,time:state.time,comment:"Добавлено сотрудником через Telegram"},state.bookingId,"bot");
         if (!saved.success) return saved;
         completeStaffCreationDraft(chatId,token,state);
         return {success:true,view:"saved",booking:{id:saved.id,name:state.name,phone:state.phone,service:state.service,date:state.date,time:state.time,status:"Активна"}};
@@ -3724,14 +3720,19 @@ function sendStaffSlotManager(chatId,date) {
 }
 
 // Источник сохраняется сервером и не зависит от введённого клиентом комментария.
+function bookingSource(booking) {
+  const props = PropertiesService.getScriptProperties();
+  const source = props.getProperty("BOOKING_SOURCE_"+booking.id);
+  if (source === "bot" || source === "site") return source;
+  return props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id) || /через Telegram/.test(booking.comment || "") ? "bot" : "site";
+}
 function bookingContactText(booking) {
   const props = PropertiesService.getScriptProperties();
-  const source = props.getProperty("BOOKING_SOURCE_" + booking.id);
+  const source = bookingSource(booking);
   const linked = props.getProperty(BOOKING_CLIENT_CHAT_PREFIX + booking.id);
-  const label = source === "bot" ? "Telegram-бот" : source === "site" ? "Сайт" : "Ранее созданная / ручная запись";
+  const label = source === "bot" ? "Telegram-бот" : "Сайт";
   return bookingContactHistory(booking) + "📍 <b>Источник:</b> " + label + "\n" + (linked
     ? "💬 Telegram подключён — уведомления через бота."
-    : booking.telegram ? "☎️ Позвонить: Telegram указан, но уведомления через бота не подключены."
     : "☎️ Позвонить клиенту для подтверждения или переноса.");
 }
 function connectWebsiteBooking(chatId, token) {
@@ -3793,7 +3794,7 @@ function needsStaffContact(booking) {
   if (getBookingDeliveryFailures(booking.id).length) return true;
   const props = PropertiesService.getScriptProperties();
   return booking.date >= getDateAfterDays(0) && booking.status === "Ожидает подтверждения" &&
-    props.getProperty("BOOKING_SOURCE_"+booking.id) === "site" && !props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
+    bookingSource(booking) === "site" && !props.getProperty(BOOKING_CLIENT_CHAT_PREFIX+booking.id);
 }
 function bookingContactHistory(booking) {
   const labels = {confirm:"подтверждение",cancel:"отмена",move:"перенос",reminder:"напоминание"};
