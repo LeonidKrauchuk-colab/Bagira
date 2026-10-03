@@ -1003,19 +1003,6 @@
       </div>
 
 
-      <!-- TELEGRAM -->
-
-      <div class="modal-row">
-
-        <label>
-          Telegram
-        </label>
-
-        <input type="text" id="bookingTelegram" placeholder="@username">
-
-      </div>
-
-
       <!-- УСЛУГА -->
 
       <div class="modal-row">
@@ -1443,10 +1430,8 @@
       );
 
 
-    const bookingTelegram =
-      document.getElementById(
-        "bookingTelegram"
-      );
+    // Preserve the existing contact when editing; new bookings have no Telegram contact.
+    let bookingTelegramValue = "";
 
 
     const bookingService =
@@ -1901,7 +1886,7 @@
       if(booking.contactNeeded)add("Не дозвонилась",()=>runWorkbench(booking,"missed"));
       if(booking.deliveryFailures?.length)add("Клиент уведомлён по телефону",()=>runWorkbench(booking,"resolved",{},true));
       add("История клиента",()=>{document.getElementById("clientSearch").value=phone || booking.name;renderWorkbenchResults();});
-      add("Записать снова",()=>{openBookingModal(selectedDate.value,"");bookingName.value=booking.name||"";bookingPhone.value=booking.phone||"";bookingTelegram.value=booking.telegram||"";bookingService.value=booking.service||"";modalOriginal=modalSnapshot();});
+      add("Записать снова",()=>{openBookingModal(selectedDate.value,"");bookingName.value=booking.name||"";bookingPhone.value=booking.phone||"";bookingService.value=booking.service||"";modalOriginal=modalSnapshot();});
       return card;
     }
 
@@ -2015,7 +2000,7 @@
         "";
 
 
-      bookingTelegram.value =
+      bookingTelegramValue =
         "";
 
 
@@ -2066,7 +2051,7 @@
 
       bookingName.value = booking.name || "";
       bookingPhone.value = booking.phone || "";
-      bookingTelegram.value = booking.telegram || "";
+      bookingTelegramValue = booking.telegram || "";
       bookingComment.value = booking.comment || "";
 
       modalError.textContent = "";
@@ -2113,7 +2098,7 @@
       const time = bookingTime.value.trim();
       const name = bookingName.value.trim();
       const phone = bookingPhone.value.trim();
-      const telegram = bookingTelegram.value.trim();
+      const telegram = bookingTelegramValue.trim();
       const service = bookingService.value.trim();
       const comment = bookingComment.value.trim();
 
@@ -2706,7 +2691,7 @@
 
     }
 
-    function modalSnapshot(){return JSON.stringify([bookingDate.value,bookingTime.value,bookingName.value,bookingPhone.value,bookingTelegram.value,bookingService.value,bookingComment.value]);}
+    function modalSnapshot(){return JSON.stringify([bookingDate.value,bookingTime.value,bookingName.value,bookingPhone.value,bookingTelegramValue,bookingService.value,bookingComment.value]);}
     window.addEventListener("beforeunload",event=>{if(settingsDirty || bookingModal.classList.contains("active") && modalOriginal && modalSnapshot()!==modalOriginal){event.preventDefault();event.returnValue="";}});
     scheduleSettingsPanel.addEventListener("input",()=>settingsDirty=true);
     function workbenchMessage(text){document.getElementById("workbenchStatus").textContent=text;}
