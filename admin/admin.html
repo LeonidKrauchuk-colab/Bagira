@@ -878,6 +878,7 @@
           <div id="closedDaysError" style="color:#b42318;margin-top:8px"></div>
         </div>
       </details>
+      <section class="workbench-panel"><button type="button" id="availabilityPosterButton">Картинка со свободными окнами</button><p id="availabilityPosterStatus" role="status" aria-live="polite"></p></section>
       <details class="workbench-panel"><summary>Календарь загрузки</summary><div id="workloadCalendar"></div></details>
       <details class="workbench-panel"><summary>Окна и выходной выбранного дня</summary><div id="daySlotControls"></div></details>
       <!-- =========================
@@ -2773,6 +2774,7 @@
       dialog.append(heading,details,date,time,status,save,close);document.body.append(dialog);dialog.addEventListener("close",()=>dialog.remove(),{once:true});dialog.showModal();await slots();
     }
   </script>
+  <script src="availability-poster.js"></script>
 </body>
 
 </html>
