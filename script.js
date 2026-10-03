@@ -731,6 +731,7 @@ async function loadNearestAvailability() {
         if (pendingWebsiteBooking) return;
         selectedTimeInput.value = "";
         dateInput.value = slot.date;
+    syncBookingCalendar();
         renderTimeButtons(slot.date);
         timeButtons.forEach(item => {
           item.disabled = true;
@@ -2586,7 +2587,7 @@ async function offerNearestSlot(forDate) {
     button.textContent="Ближайшее окно — "+formatDateForDisplay(slot.date)+", "+slot.time;
     button.addEventListener("click",async()=>{
       if(pendingWebsiteBooking)return;
-      button.disabled=true;dateInput.value=slot.date;selectedTimeInput.value="";renderTimeButtons(slot.date);
+      button.disabled=true;dateInput.value=slot.date;syncBookingCalendar();selectedTimeInput.value="";renderTimeButtons(slot.date);
       timeButtons.forEach(item=>item.disabled=true);
       await loadBusyTimes();
       if(dateInput.value!==slot.date)return;
@@ -2646,8 +2647,10 @@ function restoreWebsiteDraft() {
     else loadBusyTimes();
   }catch(error){clearWebsiteDraft();}
 }
+let syncBookingCalendar = () => {};
 async function loadBookingCalendar() {
   const host=document.getElementById("bookingCalendar");if(!host)return;
+  syncBookingCalendar = () => {};
   host.textContent="Загружаем доступные даты…";
   try {
     const response=await fetch(`${SCRIPT_URL}?calendar=1&t=${Date.now()}`),result=await response.json();
@@ -2674,7 +2677,12 @@ async function loadBookingCalendar() {
         button.onclick=()=>{dateInput.value=date;dateInput.dispatchEvent(new Event("change",{bubbles:true}));render();};grid.append(button);
       }
     }
-    const selected=months.indexOf(dateInput.value.slice(0,7));if(selected>=0)monthIndex=selected;render();
+    syncBookingCalendar = () => {
+      const selected=months.indexOf(dateInput.value.slice(0,7));
+      if(selected>=0)monthIndex=selected;
+      render();
+    };
+    syncBookingCalendar();
   }catch(error){dateInput.readOnly=false;host.textContent="Календарь временно недоступен. Выберите дату в поле выше.";}
 }
 if(bookingForm) {
@@ -2731,6 +2739,7 @@ nextOpeningBook?.addEventListener("click", async () => {
     setAvailabilityPanelOpen(false);
     hideError();
     dateInput.value = slot.date;
+    syncBookingCalendar();
     selectedTimeInput.value = "";
     renderTimeButtons(slot.date);
     timeButtons.forEach(button => button.disabled = true);
