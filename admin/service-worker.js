@@ -1,9 +1,11 @@
-const CACHE_NAME = "bagira-admin-v21";
+const CACHE_NAME = "bagira-admin-v22";
 
 const FILES_TO_CACHE = [
   "./admin.html",
   "./manifest.json",
-  "./availability-poster.js"
+  "./availability-poster.js",
+  "./poster-assets/silk-background.png",
+  "./poster-assets/CormorantGaramond.ttf"
 ];
 
 
