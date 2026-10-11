@@ -3587,7 +3587,13 @@ button:disabled {
   align-items: center;
 }
 
-.master-photo,
+.master-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 24px;
+}
+
 .master-photo-placeholder {
   width: 100%;
   border-radius: 24px;
@@ -3637,6 +3643,23 @@ button:disabled {
   margin: 0 0 18px;
 }
 
+.master-story h4 {
+  font-size: 18px;
+  line-height: 1.4;
+  margin: 24px 0 10px;
+}
+
+.master-services {
+  padding-left: 22px;
+  margin: 0 0 18px;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.master-services li + li {
+  margin-top: 12px;
+}
+
 .master-booking-link {
   display: flex;
   justify-content: space-between;
@@ -3665,7 +3688,10 @@ button:disabled {
     margin-bottom: 24px;
   }
 
-  .master-photo,
+  .master-photo {
+    border-radius: 18px;
+  }
+
   .master-photo-placeholder {
     aspect-ratio: 4/3;
     border-radius: 18px;
@@ -3680,7 +3706,8 @@ button:disabled {
     font-size: 48px;
   }
 
-  .master-story p {
+  .master-story p,
+  .master-services {
     font-size: 15px;
     line-height: 1.75;
   }
