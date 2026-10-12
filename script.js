@@ -1694,6 +1694,32 @@ document
 // ГАЛЕРЕЯ — КАРУСЕЛИ
 // ==========================================================
 
+async function initializeSiteGallery() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(`${SCRIPT_URL}?gallery=1`, { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw Error("Gallery unavailable");
+    const result = await response.json();
+    if (!result.success || !Array.isArray(result.gallery?.items)) throw Error("Gallery unavailable");
+    const track = document.querySelector(".gallery-track");
+    const fragment = document.createDocumentFragment();
+    result.gallery.items.forEach(item => {
+      if (typeof item.src !== "string" || !/^(data:image\/jpeg;base64,[A-Za-z0-9+/]+=*|images\/galery_images\/[a-zA-Z0-9.-]+)$/.test(item.src)) return;
+      const card = document.createElement("div"); card.className = "gallery-item";
+      const img = document.createElement("img"); img.src = item.src;
+      img.alt = item.caption || "Работа мастера «Багира»"; img.loading = "lazy"; img.decoding = "async";
+      card.append(img);
+      if (item.caption) { const caption = document.createElement("p"); caption.className = "gallery-caption"; caption.textContent = item.caption; card.append(caption); }
+      fragment.append(card);
+    });
+    if (track) track.replaceChildren(fragment);
+    if (!result.gallery.items.length) document.getElementById("gallery").hidden = true;
+  } catch (error) {
+    // Preserve the bundled gallery when offline or while the backend is being upgraded.
+    console.info("Используем встроенную галерею:", error.message);
+  } finally { clearTimeout(timeout); }
+
 const galleryCarousels =
   document.querySelectorAll(
     ".gallery-carousel"
@@ -1916,8 +1942,7 @@ document.querySelectorAll(".gallery-carousel").forEach((carousel) => {
 
         <img
           class="lightbox-image"
-          src="${images[currentIndex].src}"
-          alt="${images[currentIndex].alt || ""}"
+          alt=""
         >
 
         <button class="lightbox-next" type="button">
@@ -2078,6 +2103,9 @@ document.querySelectorAll(".gallery-carousel").forEach((carousel) => {
   });
 
 });
+}
+initializeSiteGallery();
+
 // ===============================
 // PWA — SERVICE WORKER
 // ===============================

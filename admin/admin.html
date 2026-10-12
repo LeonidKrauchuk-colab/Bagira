@@ -782,6 +782,16 @@
     #statisticsLoading {font-size:12px;}
     @keyframes statistics-spin {to {transform:rotate(360deg);}}
     @media(prefers-reduced-motion:reduce){.statistics-spinner {animation:none;}}
+    .gallery-editor-toolbar, .gallery-editor-actions { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    #galleryFiles { max-width:100%; }
+    #galleryEditorList { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+    .gallery-editor-card { min-width:0; border:1px solid #e8d8d4; border-radius:14px; padding:12px; }
+    .gallery-editor-card img { width:100%; height:220px; object-fit:contain; background:#faf5f2; border-radius:10px; }
+    .gallery-editor-card label { display:grid; gap:6px; margin-top:10px; }
+    .gallery-editor-card input { width:100%; box-sizing:border-box; padding:10px; font-size:16px; }
+    #galleryEditor button { min-height:44px; }
+    #galleryEditorStatus { overflow-wrap:anywhere; }
+    @media(max-width:540px) { #galleryEditorList { grid-template-columns:1fr; } }
   </style>
 
 </head>
@@ -881,6 +891,16 @@
       <details class="workbench-panel"><summary>Календарь загрузки</summary><div id="workloadCalendar"></div></details>
       <details class="workbench-panel"><summary>Окна и выходной выбранного дня</summary><div id="daySlotControls"></div></details>
       <section class="workbench-panel"><button type="button" id="availabilityPosterButton">Картинка со свободными окнами</button><p id="availabilityPosterStatus" role="status" aria-live="polite"></p></section>
+      <details class="workbench-panel" id="galleryEditor">
+        <summary>Галерея сайта</summary>
+        <p>Добавляйте фотографии работ, меняйте подписи и порядок. Каждое изменение сразу сохраняется на сайте. До 20 фото.</p>
+        <div class="gallery-editor-toolbar">
+          <label>Добавить фото с телефона <input id="galleryFiles" type="file" accept="image/*" multiple disabled></label>
+          <button type="button" id="galleryRefresh">Обновить</button>
+        </div>
+        <p id="galleryEditorStatus" role="status" aria-live="polite"></p>
+        <div id="galleryEditorList"></div>
+      </details>
       <!-- =========================
        ДАТА
   ========================== -->
@@ -2538,6 +2558,7 @@
     function closeAdminSession(message) {
       workbenchBookings=[];["workbenchResults","workloadCalendar","daySlotControls","workbenchStatus"].forEach(id=>document.getElementById(id).replaceChildren());document.getElementById("clientSearch").value="";document.querySelectorAll(".move-dialog").forEach(d=>d.remove());
       ADMIN_SESSION_TOKEN = "";
+      window.dispatchEvent(new Event("gallery-session-ended"));
       clearTimeout(adminSessionTimer);
       document.getElementById("adminApp").style.display = "none";
       document.getElementById("telegramLogin").style.display = "flex";
@@ -2760,6 +2781,7 @@
     }
   </script>
   <script src="availability-poster.js"></script>
+  <script src="gallery-editor.js"></script>
 </body>
 
 </html>

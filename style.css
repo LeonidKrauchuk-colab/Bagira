@@ -3793,3 +3793,5 @@ button:disabled {
     font-size: 18px;
   }
 }
+
+.gallery-caption { margin:0; padding:12px; font-size:14px; line-height:1.5; overflow-wrap:anywhere; background:#fffaf5; }

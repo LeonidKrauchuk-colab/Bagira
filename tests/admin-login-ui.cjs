@@ -4,7 +4,7 @@ const elements=new Map();
 function element(id){if(!elements.has(id)) elements.set(id,{style:{},textContent:'',children:[],hidden:false,replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},addEventListener(name,fn){this[name]=fn;}});return elements.get(id);}
 let response={success:true,botUsername:'BagiraMasterBot'},loaded=0,requests=[];
 const context=vm.createContext({
- window:{}, console, Date, Math, bookingModal:{classList:{contains:()=>false}},
+ window:{dispatchEvent(){}}, Event, console, Date, Math, bookingModal:{classList:{contains:()=>false}},
  document:{querySelectorAll:()=>[],getElementById:element,createElement:()=>({setAttribute(key,value){this[key]=value;}})},
  fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>response};},
  setTimeout:()=>1,clearTimeout(){},setToday(){},loadClosedDays:async()=>{},loadBookings:async()=>{loaded++;},closeBookingModal(){},bookingsContainer:element('bookings'),

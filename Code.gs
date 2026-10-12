@@ -53,6 +53,10 @@ function doGet(e) {
       return jsonResponse(getTelegramLoginConfig());
     }
 
+    if (e && e.parameter && e.parameter.gallery === "1") {
+      return jsonResponse({ success: true, gallery: readGallery() });
+    }
+
     const sheet = getSheet();
     if (String(e && e.parameter && e.parameter.calendar || "") === "1") {
       const settings=getScheduleSettings(), rows=getBookings(sheet), days=[];
@@ -177,6 +181,12 @@ function doPost(e) {
 
     if (data.action === "telegramAdminLogin") return jsonResponse(loginTelegramAdmin(data.telegramAuth));
     if (data.action === "logoutAdmin") return jsonResponse(logoutTelegramAdmin(data.sessionToken));
+    if (data.action === "adminGallery") {
+      if (!checkTelegramAdminAccess(data.sessionToken)) {
+        return jsonResponse({ success: false, code: "AUTH_REQUIRED", error: "Войдите через Telegram ещё раз." });
+      }
+      return jsonResponse(editGallery(data));
+    }
 
     // ContentService redirects JSON responses; Telegram needs a direct acknowledgement.
     if (data && (data.callback_query || data.message || data.action === "diagnoseWebhookTransport")) {
@@ -3876,4 +3886,70 @@ function adminWorkbench(data) {
     }catch(error){console.error("Изменение сохранено, уведомление не доставлено");}
   }
   return result;
+}
+
+// Gallery is stored as one atomic JSON snapshot, split below Sheets' cell limit.
+// No public Drive folder or additional storage credentials are required.
+function defaultGallery() {
+  return { revision: "initial", items: ["1.avif", "2.jpg", "3.avif", "4.jpg", "5.jpg", "6.jpg", "7.jpg"].map(function(file, index) {
+    return { id: "original-" + index, src: "images/galery_images/" + file, caption: "Работа мастера «Багира»" };
+  }) };
+}
+
+function readGallery() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Галерея сайта");
+  if (!sheet || !sheet.getLastRow()) return defaultGallery();
+  const raw = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues().map(function(row) { return row[0] ? JSON.parse(row[0]) : ""; }).join("");
+  const gallery = JSON.parse(raw);
+  if (!gallery || !Array.isArray(gallery.items) || typeof gallery.revision !== "string") throw Error("Не удалось прочитать галерею");
+  return gallery;
+}
+
+function editGallery(data) {
+  if (data.operation === "list") return { success: true, gallery: readGallery() };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const gallery = readGallery();
+    if (data.revision !== gallery.revision) {
+      return { success: false, code: "CONFLICT", error: "Галерея уже изменилась. Нажмите «Обновить» и повторите действие." };
+    }
+    const index = gallery.items.findIndex(function(item) { return item.id === data.id; });
+    if (data.operation === "add") {
+      if (gallery.items.length >= 20) throw Error("В галерее может быть до 20 фотографий. Удалите ненужные перед загрузкой.");
+      if (typeof data.src !== "string" || data.src.length > 200000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(data.src)) throw Error("Загрузите JPEG размером до 150 КБ.");
+      const bytes = Utilities.base64Decode(data.src.split(",")[1]);
+      if (bytes.length < 4 || (bytes[0] & 255) !== 255 || (bytes[1] & 255) !== 216 || (bytes[bytes.length - 2] & 255) !== 255 || (bytes[bytes.length - 1] & 255) !== 217) throw Error("Некорректный JPEG");
+      gallery.items.push({ id: Utilities.getUuid(), src: data.src, caption: galleryCaption(data.caption) });
+    } else {
+      if (index < 0) throw Error("Фото не найдено. Обновите галерею.");
+      if (data.operation === "remove") gallery.items.splice(index, 1);
+      else if (data.operation === "caption") gallery.items[index].caption = galleryCaption(data.caption);
+      else if (data.operation === "move") {
+        if (data.direction !== -1 && data.direction !== 1) throw Error("Некорректное направление");
+        const target = index + data.direction;
+        if (target < 0 || target >= gallery.items.length) throw Error("Фото уже находится на краю галереи");
+        const item = gallery.items.splice(index, 1)[0];
+        gallery.items.splice(target, 0, item);
+      } else throw Error("Неизвестное действие с галереей");
+    }
+    gallery.revision = Utilities.getUuid();
+    const raw = JSON.stringify(gallery);
+    // Fixed-size range clears old trailing chunks when an image is deleted.
+    const rows = Array.from({ length: 140 }, function(_, i) { const chunk = raw.slice(i * 30000, (i + 1) * 30000); return [chunk ? JSON.stringify(chunk) : ""]; });
+    if (raw.length > 4200000) throw Error("Галерея слишком большая");
+    const book = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = book.getSheetByName("Галерея сайта") || book.insertSheet("Галерея сайта");
+    if (sheet.getMaxRows() < rows.length) sheet.insertRowsAfter(sheet.getMaxRows(), rows.length - sheet.getMaxRows());
+    sheet.getRange(1, 1, rows.length, 1).setValues(rows);
+    SpreadsheetApp.flush();
+    return { success: true, gallery: gallery };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function galleryCaption(value) {
+  if (typeof value !== "string" || value.length > 160) throw Error("Подпись должна быть не длиннее 160 символов");
+  return value.trim();
 }
