@@ -1129,7 +1129,7 @@ h3,
   color: white;
   background:
     linear-gradient(90deg, rgba(39, 27, 29, .78) 0%, rgba(39, 27, 29, .48) 45%, rgba(39, 27, 29, .18) 100%),
-    url("images/bacground_images/hero.avif") center / cover no-repeat;
+    url("images/bacground_images/photo_2026-10-27\ 12.25.12.jpeg") center / cover no-repeat;
 }
 
 .hero-content {
@@ -1338,7 +1338,7 @@ h3,
     min-height: 600px;
     background:
       linear-gradient(rgba(39, 27, 29, .64), rgba(39, 27, 29, .64)),
-      url("images/bacground_images/hero_mob.avif") center / cover no-repeat;
+      url("images/bacground_images/photo_2026-10-27\ 12.25.12.jpeg") center / cover no-repeat;
   }
 
   .gallery-slide {
@@ -3656,7 +3656,7 @@ button:disabled {
   line-height: 1.8;
 }
 
-.master-services li + li {
+.master-services li+li {
   margin-top: 12px;
 }
 
@@ -3794,4 +3794,11 @@ button:disabled {
   }
 }
 
-.gallery-caption { margin:0; padding:12px; font-size:14px; line-height:1.5; overflow-wrap:anywhere; background:#fffaf5; }
+.gallery-caption {
+  margin: 0;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  background: #fffaf5;
+}
