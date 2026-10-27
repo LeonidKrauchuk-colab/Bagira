@@ -29,7 +29,7 @@
     function box(x,y,w,h,r) {
       c.beginPath();c.roundRect(x,y,w,h,r);c.fill();c.stroke();
     }
-    text('М А С Т Е Р С К А Я',414,25);
+    text('МАНИКЮР ПЕДИКЮР ДЕПИЛЯЦИЯ',414,25);
     text('БАГИРА',532,126,true);
     text('Свободные окошки',665,108,true);
     text('Найдите время для себя',753,29);
